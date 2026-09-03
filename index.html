@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Evaluation Power Calculator</title>
+<meta name="description" content="Analytic sample size and power for one-sided one-proportion tests of LLM response acceptability.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500&display=swap">
+<style>
+:root {
+  --bg: #F5F7F8;
+  --surface: #FFFFFF;
+  --ink: #17202A;
+  --muted: #5B6672;
+  --rule: #D5DCE1;
+  --accent: #0F766E;
+  --accent-ink: #0A5A54;
+  --accent-tint: #E4F2EF;
+  --danger: #B4432F;
+  --danger-tint: #F9ECE9;
+  --focus: #0F766E;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1417;
+    --surface: #161C21;
+    --ink: #E4E9EC;
+    --muted: #9AA6B0;
+    --rule: #28323A;
+    --accent: #3DB8AB;
+    --accent-ink: #7ED9CE;
+    --accent-tint: #15302E;
+    --danger: #E07A66;
+    --danger-tint: #33201C;
+    --focus: #3DB8AB;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1417;
+  --surface: #161C21;
+  --ink: #E4E9EC;
+  --muted: #9AA6B0;
+  --rule: #28323A;
+  --accent: #3DB8AB;
+  --accent-ink: #7ED9CE;
+  --accent-tint: #15302E;
+  --danger: #E07A66;
+  --danger-tint: #33201C;
+  --focus: #3DB8AB;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent-ink); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+/* Header */
+header { margin-bottom: 36px; }
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+h1 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(1.7rem, 3.2vw, 2.3rem);
+  line-height: 1.15;
+  margin: 0 0 12px;
+  text-wrap: balance;
+  max-width: 24ch;
+}
+.lede {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.02rem;
+}
+.lede b { color: var(--ink); font-weight: 500; }
+
+/* Calculator grid */
+.calc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+@media (max-width: 800px) {
+  .calc { grid-template-columns: 1fr; }
+}
+
+/* Mode switch */
+.mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 24px;
+  background: var(--surface);
+}
+.mode label {
+  position: relative;
+  display: block;
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: center;
+  font-weight: 500;
+  color: var(--muted);
+  border-right: 1px solid var(--rule);
+}
+.mode label:last-child { border-right: 0; }
+.mode input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.mode label:has(input:checked) {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+.mode label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: -3px; }
+.mode small { display: block; font-weight: 400; font-size: 0.8rem; opacity: 0.85; }
+
+/* Fields */
+.fields { display: grid; gap: 18px; }
+.field { display: grid; gap: 6px; }
+.field label { font-weight: 500; }
+.field .hint { color: var(--muted); font-size: 0.86rem; margin: 0; }
+.field input[type="number"], .field select {
+  font: 500 1rem var(--mono);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 10px 12px;
+  width: 100%;
+  max-width: 220px;
+}
+.field select { font-family: var(--sans); max-width: 360px; }
+.field input:invalid { border-color: var(--danger); }
+.field.is-hidden { display: none; }
+
+/* Result panel */
+.result {
+  position: sticky;
+  top: 24px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.result-head {
+  background: var(--accent-tint);
+  padding: 22px 24px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.result-label {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  margin: 0 0 6px;
+}
+.result-value {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 3rem;
+  line-height: 1;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.result-value small {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 8px;
+}
+.result-body { padding: 18px 24px 22px; }
+.result-body p { margin: 0 0 12px; }
+.result-body p:last-child { margin-bottom: 0; }
+.decision { font-size: 0.98rem; }
+.decision b { font-family: var(--mono); font-weight: 500; }
+dl.stats {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 14px 0 0;
+  font-size: 0.92rem;
+}
+dl.stats dt { color: var(--muted); }
+dl.stats dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.result.is-error .result-head { background: var(--danger-tint); }
+.result.is-error .result-label { color: var(--danger); }
+.result-error { margin: 0; color: var(--danger); }
+
+/* Nearby table */
+.nearby { margin-top: 18px; border-top: 1px solid var(--rule); padding-top: 14px; }
+.nearby h3 {
+  font-size: 0.78rem;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+.table-wrap { overflow-x: auto; }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+th:last-child, td:last-child { padding-right: 0; }
+th { font-weight: 500; color: var(--muted); font-size: 0.8rem; }
+td { font-family: var(--mono); }
+tr.is-current td { color: var(--accent-ink); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+
+/* Power-vs-N chart */
+.chart-section {
+  margin-top: 32px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 20px 24px 18px;
+}
+.chart-head { margin-bottom: 14px; }
+.chart-label {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 3px;
+}
+.chart-sub {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 0;
+}
+.chart-wrap {
+  position: relative;
+  user-select: none;
+}
+.chart-wrap svg { display: block; }
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  font-family: var(--mono);
+  color: var(--ink);
+  opacity: 0;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  transition: opacity 80ms;
+  z-index: 10;
+}
+.chart-tooltip.is-visible { opacity: 1; }
+
+/* Reading sections */
+.prose { max-width: 66ch; margin-top: 64px; }
+.prose h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.45rem;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+.prose section + section { margin-top: 44px; }
+.prose p { margin: 0 0 14px; }
+.prose code, .prose .m { font-family: var(--mono); font-size: 0.92em; }
+.hyp {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  overflow-x: auto;
+}
+dl.assume { margin: 0; display: grid; gap: 16px; }
+dl.assume dt { font-weight: 600; }
+dl.assume dd { margin: 2px 0 0; color: var(--ink); }
+dl.assume dd .why { color: var(--muted); }
+.formula {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 10px 0 14px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.callout {
+  background: var(--accent-tint);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  font-size: 0.96rem;
+}
+.callout b { font-weight: 600; }
+footer {
+  margin-top: 64px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 0.86rem;
+  max-width: 66ch;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mode label { transition: background-color 120ms ease, color 120ms ease; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <p class="eyebrow">One-sided one-proportion test · binary judgments · analytic</p>
+  <h1>Sample size and power for LLM evaluation studies</h1>
+  <p class="lede">You will judge <b>N</b> model responses as acceptable or not, and want to show that the true acceptable rate exceeds a <b>performance threshold</b>. Enter what you expect, and get the number of responses you need or the power you have.</p>
+</header>
+
+<div class="calc">
+  <form id="form" class="inputs" autocomplete="off" novalidate>
+    <div class="mode" role="radiogroup" aria-label="What to calculate">
+      <label><input type="radio" name="mode" value="n" checked>Sample size<small>from a target power</small></label>
+      <label><input type="radio" name="mode" value="power">Power<small>from a fixed N</small></label>
+    </div>
+
+    <div class="fields">
+      <div class="field">
+        <label for="p0">Performance threshold (p₀)</label>
+        <input id="p0" type="number" min="0.001" max="0.999" step="0.01" value="0.90" inputmode="decimal">
+        <p class="hint">The acceptable rate you need to beat. Null hypothesis: true rate ≤ p₀.</p>
+      </div>
+      <div class="field">
+        <label for="p1">Expected proportion (p₁)</label>
+        <input id="p1" type="number" min="0.001" max="1" step="0.01" value="0.95" inputmode="decimal">
+        <p class="hint">Your best guess of the model's true acceptable rate. Must exceed p₀.</p>
+      </div>
+      <div class="field">
+        <label for="alpha">Significance level (α)</label>
+        <input id="alpha" type="number" min="0.0001" max="0.5" step="0.01" value="0.05" inputmode="decimal">
+        <p class="hint">One-sided. Probability of claiming the model beats p₀ when it does not.</p>
+      </div>
+      <div class="field" id="field-power">
+        <label for="power">Target power (1 − β)</label>
+        <input id="power" type="number" min="0.01" max="0.9999" step="0.05" value="0.80" inputmode="decimal">
+        <p class="hint">Probability of detecting the improvement if the true rate is really p₁.</p>
+      </div>
+      <div class="field is-hidden" id="field-n">
+        <label for="n">Number of responses (N)</label>
+        <input id="n" type="number" min="1" max="1000000" step="1" value="200" inputmode="numeric">
+        <p class="hint">How many independent responses you will judge.</p>
+      </div>
+      <div class="field">
+        <label for="method">Test method</label>
+        <select id="method">
+          <option value="exact" selected>Exact binomial (recommended)</option>
+          <option value="score">Score (Wilson) z-test</option>
+          <option value="score-cc">Score z-test + continuity correction</option>
+        </select>
+        <p class="hint" id="method-hint"></p>
+      </div>
+    </div>
+  </form>
+
+  <aside class="result" id="result" aria-live="polite">
+    <div class="result-head">
+      <p class="result-label" id="result-label">Responses needed</p>
+      <p class="result-value" id="result-value">—</p>
+    </div>
+    <div class="result-body" id="result-body"></div>
+  </aside>
+</div>
+
+<!-- Power-vs-N chart -->
+<div class="chart-section" id="chart-section">
+  <div class="chart-head">
+    <p class="chart-label">Power vs. sample size</p>
+    <p class="chart-sub" id="chart-sub"></p>
+  </div>
+  <div class="chart-wrap" id="chart-wrap">
+    <svg id="power-chart" width="100%" height="240" role="img" aria-label="Power versus sample size curve">
+      <g id="chart-g"></g>
+    </svg>
+    <div id="chart-tooltip" class="chart-tooltip"></div>
+  </div>
+</div>
+
+<div class="prose">
+  <section>
+    <h2>What is being tested</h2>
+    <p>Let <span class="m">p</span> be the true probability that a response from this model, on this task distribution, is judged acceptable. The test asks whether the data are inconsistent with the model performing at or below the threshold:</p>
+    <p class="hyp">H₀: p ≤ p₀ &nbsp;&nbsp;versus&nbsp;&nbsp; H₁: p &gt; p₀</p>
+    <p>You judge <span class="m">N</span> responses and count the acceptable ones, <span class="m">X</span>. H₀ is rejected when <span class="m">X</span> is at least the critical count shown in the result panel. The <em>expected proportion</em> <span class="m">p₁</span> is not tested; it is the alternative you plan around, and power is the probability of rejecting H₀ if <span class="m">p</span> is truly <span class="m">p₁</span>.</p>
+  </section>
+
+  <section>
+    <h2>Assumptions that make this test valid</h2>
+    <dl class="assume">
+      <div>
+        <dt>Each judgment is binary and the rubric is fixed in advance.</dt>
+        <dd>Every response is acceptable or not, by criteria decided before any responses are seen. <span class="why">Changing the rubric after looking at outputs makes the observed rate uninterpretable.</span></dd>
+      </div>
+      <div>
+        <dt>Responses are independent.</dt>
+        <dd>One response per prompt, from prompts that do not share content. <span class="why">Multiple samples of the same prompt, paraphrased duplicates, or multi-turn responses from one conversation are correlated: they count as fewer than N independent trials and inflate the false-positive rate.</span></dd>
+      </div>
+      <div>
+        <dt>The prompts are a random sample from the distribution you want to make a claim about.</dt>
+        <dd>The test estimates one proportion for one population. <span class="why">If your prompts are easier, narrower, or differently mixed than deployment traffic, p refers to your prompt set, not to the deployment.</span></dd>
+      </div>
+      <div>
+        <dt>N is fixed before data collection.</dt>
+        <dd>Decide the sample size here and judge all N responses. <span class="why">Stopping early once the count looks good, or adding responses when it does not, raises the true α above the nominal value.</span></dd>
+      </div>
+      <div>
+        <dt>Judgments are accurate.</dt>
+        <dd>The test treats each label as the truth. <span class="why">A human or LLM judge that mislabels some responses shifts the observed rate; if the judge is lenient, you can pass the threshold without deserving to. Measure judge agreement separately.</span></dd>
+      </div>
+      <div>
+        <dt>The question is one-sided.</dt>
+        <dd>You want evidence that performance exceeds p₀ and would not act on evidence that it is lower. <span class="why">A non-significant result does not show performance is below p₀; it only fails to show it is above.</span></dd>
+      </div>
+      <div>
+        <dt>Score/CC methods only: N is large enough.</dt>
+        <dd>The z-tests need both N·p₀ and N·(1−p₀) to be at least about 10. <span class="why">With thresholds near 1, such as 0.90, the failure count is small and the approximation is poor below roughly N = 100. The exact test has no such requirement.</span></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section>
+    <h2>How the numbers are computed</h2>
+
+    <div class="callout">
+      <b>These are analytic calculations — not Monte Carlo simulations.</b> Every number on this page comes from evaluating a closed-form mathematical expression or summing an exact probability distribution. No random experiments are simulated. A Monte Carlo power study would instead repeatedly generate fake datasets, run the test on each, and count how often it rejects; the analytic approach gives the same answer directly from the binomial distribution, in milliseconds and without sampling error.
+    </div>
+
+    <p><b>Exact binomial.</b> Under H₀ at the boundary (<span class="m">p = p₀</span>), the count of acceptable responses follows <span class="m">X ~ Binomial(N, p₀)</span>. The critical count <span class="m">c</span> is the smallest integer satisfying <span class="m">P(X ≥ c | p₀) ≤ α</span>. Power is <span class="m">P(X ≥ c | p₁)</span>. Both tail probabilities are computed by summing binomial terms exactly, using a log-space recurrence to avoid underflow at large N. For sample size, N is the smallest value whose power reaches the target — found by scanning N = 1, 2, 3, … and stopping at the first hit. Because binomial probabilities are discrete, the achieved α is strictly at most the nominal α, and power does not increase smoothly with N; the sawtooth in the chart and the nearby-N table both show this.</p>
+
+    <p><b>Score (Wilson) z-test.</b> The score test uses the standard error evaluated under the null hypothesis proportion p₀ — not under the sample estimate p̂ as the Wald test does. Rejecting H₀ by the score test is exactly equivalent to the one-sided Wilson score confidence lower bound on p exceeding p₀. This equivalence is why your intuition was right: the Wilson interval is superior to Wald near 0 and 1 precisely because it evaluates uncertainty at p₀ rather than at an extreme p̂, and the same logic applies to the test. A Wald test is not offered here because the score test is uniformly better for the parameter values relevant to LLM evaluation (thresholds ≥ 0.80).</p>
+    <p>The formulas, with <span class="m">z<sub>α</sub></span> and <span class="m">z<sub>β</sub></span> denoting upper standard-normal quantiles:</p>
+    <pre class="formula">N     = ⌈ ( (z_α·√(p₀(1−p₀)) + z_β·√(p₁(1−p₁))) / (p₁ − p₀) )² ⌉
+power = Φ( ( (p₁ − p₀)·√N  −  z_α·√(p₀(1−p₀)) ) / √(p₁(1−p₁)) )
+crit  = ⌈ N·p₀ + z_α·√(N·p₀(1−p₀)) ⌉</pre>
+
+    <p><b>Score z-test + continuity correction.</b> The binomial is a discrete distribution approximated by a continuous normal. The continuity correction applies a ½ adjustment to bridge them: the critical count becomes <span class="m">⌈N·p₀ + z<sub>α</sub>·√(N·p₀(1−p₀)) + ½⌉</span>, making it harder to reject and keeping the true Type I error closer to the nominal α. Power at p₁ is then computed from this corrected critical count using a normal approximation on the alternative side. For sample size, the closed-form score formula provides a starting point; a short search upward finds the first N at which corrected power meets the target (typically the same N or one or two larger). At large N the correction is negligible; it matters most below N ≈ 200. The corrected test tracks the exact result more closely than the plain score test.</p>
+
+    <p>The two score methods converge toward the exact result as N grows. When they disagree, the exact result is the one to report in a publication, because it makes no approximation.</p>
+  </section>
+</div>
+
+<footer>
+  All computation runs in your browser; nothing is sent anywhere. When reporting results, include the method, p₀, p₁, α, N, and the critical count so the study can be reproduced exactly.
+</footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- numerics ---------- */
+
+  // Complementary error function (Numerical Recipes erfcc), |error| < 1.2e-7.
+  function erfc(x) {
+    var z = Math.abs(x), t = 1 / (1 + 0.5 * z);
+    var r = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 +
+      t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 +
+      t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+    return x >= 0 ? r : 2 - r;
+  }
+  function normCdf(x) { return 0.5 * erfc(-x / Math.SQRT2); }
+
+  // Inverse normal CDF (Acklam), one Newton refinement step.
+  function qnorm(p) {
+    var a = [-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+    var b = [-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+    var c = [-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+    var d = [7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+    var pl = 0.02425, ph = 1 - pl, q, r, x;
+    if (p < pl) { q = Math.sqrt(-2*Math.log(p)); x=(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+    else if (p <= ph) { q=p-0.5; r=q*q; x=(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1); }
+    else { q=Math.sqrt(-2*Math.log(1-p)); x=-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+    var e = normCdf(x) - p;
+    var u = e * Math.sqrt(2*Math.PI) * Math.exp(x*x/2);
+    return x - u / (1 + x*u/2);
+  }
+
+  // Upper tail P(X >= c | Binomial(n,p)), summed in log-space to avoid underflow.
+  function upperTail(n, c, p) {
+    if (c > n) return 0;
+    if (c <= 0) return 1;
+    if (p === 0) return 0;
+    if (p === 1) return 1;
+    var logR = Math.log(1-p) - Math.log(p);
+    var logPmf = n * Math.log(p);
+    var s = Math.exp(logPmf);
+    for (var k = n; k > c; k--) {
+      logPmf += Math.log(k / (n-k+1)) + logR;
+      s += Math.exp(logPmf);
+    }
+    return Math.min(1, s);
+  }
+
+  // Smallest c with P(X >= c | n, p0) <= alpha.
+  function critExact(n, p0, alpha) {
+    var logR = Math.log(1-p0) - Math.log(p0);
+    var logPmf = n * Math.log(p0);
+    var s = Math.exp(logPmf);
+    if (s > alpha) return n + 1;
+    for (var k = n; k >= 1; k--) {
+      logPmf += Math.log(k / (n-k+1)) + logR;
+      var pmf = Math.exp(logPmf);
+      if (s + pmf > alpha) return k;
+      s += pmf;
+    }
+    return 0;
+  }
+
+  function exactAt(n, p0, p1, alpha) {
+    var c = critExact(n, p0, alpha);
+    return { n: n, crit: c, alpha: upperTail(n, c, p0), power: upperTail(n, c, p1) };
+  }
+
+  // Score (Wilson) z-test. Uses p0 in the SE, equivalent to Wilson lower bound > p0.
+  // Power uses the continuous formula consistent with the sample size derivation.
+  function scoreAt(n, p0, p1, alpha) {
+    var za = qnorm(1 - alpha);
+    var s0 = Math.sqrt(p0*(1-p0)), s1 = Math.sqrt(p1*(1-p1));
+    var crit = Math.min(Math.ceil(n*p0 + za*Math.sqrt(n)*s0), n+1);
+    var power = s1 === 0 ? (p1 > p0 ? 1 : 0) : normCdf(((p1-p0)*Math.sqrt(n) - za*s0) / s1);
+    return { n: n, crit: crit, alpha: alpha, power: Math.max(0, power) };
+  }
+
+  // Score z-test + continuity correction (½ added to the rejection boundary).
+  function scoreCCAt(n, p0, p1, alpha) {
+    var za = qnorm(1 - alpha);
+    var s0 = Math.sqrt(p0*(1-p0)), s1 = Math.sqrt(p1*(1-p1));
+    var crit = Math.min(Math.ceil(n*p0 + za*Math.sqrt(n)*s0 + 0.5), n+1);
+    var achievedAlpha = s0 === 0 ? 0 : Math.max(0, 1 - normCdf((crit - 0.5 - n*p0)/(Math.sqrt(n)*s0)));
+    var power = s1 === 0 ? (n*p1 >= crit ? 1 : 0) : normCdf((n*p1 - crit + 0.5)/(Math.sqrt(n)*s1));
+    return { n: n, crit: crit, alpha: Math.max(0, achievedAlpha), power: Math.max(0, power) };
+  }
+
+  var N_MAX = 200000;
+
+  function sampleSizeExact(p0, p1, alpha, target) {
+    for (var n = 1; n <= N_MAX; n++) {
+      var r = exactAt(n, p0, p1, alpha);
+      if (r.power >= target) return r;
+    }
+    return null;
+  }
+
+  function sampleSizeScore(p0, p1, alpha, target) {
+    var za = qnorm(1-alpha), zb = qnorm(target);
+    var s0 = Math.sqrt(p0*(1-p0)), s1 = Math.sqrt(p1*(1-p1));
+    var n = Math.max(1, Math.ceil(Math.pow((za*s0 + zb*s1)/(p1-p0), 2)));
+    return n > N_MAX ? null : scoreAt(n, p0, p1, alpha);
+  }
+
+  function sampleSizeScoreCC(p0, p1, alpha, target) {
+    var base = sampleSizeScore(p0, p1, alpha, target);
+    var start = base ? Math.max(1, base.n - 2) : 1;
+    for (var n = start; n <= N_MAX; n++) {
+      var r = scoreCCAt(n, p0, p1, alpha);
+      if (r.power >= target) return r;
+    }
+    return null;
+  }
+
+  /* ---------- chart ---------- */
+
+  var chartState = null;
+
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function niceTicks(lo, hi, count) {
+    var range = hi - lo;
+    var rough = range / count;
+    var mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    var cands = [1, 2, 5, 10];
+    var step = mag;
+    for (var i = 0; i < cands.length; i++) {
+      if (cands[i] * mag >= rough) { step = cands[i] * mag; break; }
+    }
+    var first = Math.ceil(lo / step) * step;
+    var ticks = [];
+    for (var v = first; v <= hi + step * 0.001; v += step) ticks.push(Math.round(v));
+    return ticks;
+  }
+
+  function drawChart() {
+    if (!chartState) return;
+    var r = chartState.r, v = chartState.v;
+    var svg = document.getElementById('power-chart');
+    var g   = document.getElementById('chart-g');
+    if (!svg || !g) return;
+
+    var W = svg.getBoundingClientRect().width;
+    if (W < 60) return;
+    var H  = 240;
+    var mt = 14, mb = 42, ml = 44, mr = 18;
+    var pw = W - ml - mr, ph = H - mt - mb;
+
+    var ink    = css('--ink');
+    var muted  = css('--muted');
+    var rule   = css('--rule');
+    var accent = css('--accent');
+    var surf   = css('--surface');
+
+    var n = r.n;
+    var nLow  = Math.max(1, Math.round(n * 0.4));
+    var nHigh = Math.min(N_MAX, Math.round(n * 2.2));
+    nLow  = Math.min(nLow, n);
+    nHigh = Math.max(nHigh, Math.min(N_MAX, n + 5));
+    var step  = Math.max(1, Math.floor((nHigh - nLow) / 500));
+
+    var calcAt = function(m) {
+      if (v.method === 'exact')    return exactAt(m, v.p0, v.p1, v.alpha);
+      if (v.method === 'score-cc') return scoreCCAt(m, v.p0, v.p1, v.alpha);
+      return scoreAt(m, v.p0, v.p1, v.alpha);
+    };
+
+    var pts = [];
+    for (var ni = nLow; ni <= nHigh; ni += step) {
+      pts.push({ n: ni, power: calcAt(ni).power });
+    }
+    if (pts.length === 0 || pts[pts.length-1].n < nHigh) {
+      pts.push({ n: nHigh, power: calcAt(nHigh).power });
+    }
+
+    var xS = function(ni) { return ml + (ni - nLow) / (nHigh - nLow) * pw; };
+    var yS = function(p)  { return mt + ph - Math.max(0, Math.min(1, p)) * ph; };
+
+    var els = [];
+
+    // Horizontal grid lines at power = 0, 0.2, 0.4, 0.6, 0.8, 1.0
+    [0, 0.2, 0.4, 0.6, 0.8, 1].forEach(function(t) {
+      var y = yS(t).toFixed(1);
+      els.push('<line x1="' + ml + '" y1="' + y + '" x2="' + (W-mr) + '" y2="' + y + '" stroke="' + rule + '" stroke-width="1"/>');
+    });
+
+    // Reference power line (target in sample-size mode; current power in power mode)
+    var refP = v.mode === 'n' ? v.target : r.power;
+    var refY = yS(refP).toFixed(1);
+    els.push('<line x1="' + ml + '" y1="' + refY + '" x2="' + (W-mr) + '" y2="' + refY + '" stroke="' + muted + '" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.55"/>');
+
+    // Vertical line at current N
+    var curX = xS(n).toFixed(1);
+    els.push('<line x1="' + curX + '" y1="' + mt + '" x2="' + curX + '" y2="' + (H-mb) + '" stroke="' + muted + '" stroke-width="1" stroke-dasharray="4,3" opacity="0.45"/>');
+
+    // Area fill under curve
+    var fillPath = pts.map(function(p, i) {
+      return (i===0?'M':'L') + xS(p.n).toFixed(1) + ',' + yS(p.power).toFixed(1);
+    }).join(' ');
+    fillPath += ' L' + xS(pts[pts.length-1].n).toFixed(1) + ',' + (H-mb) + ' L' + ml + ',' + (H-mb) + ' Z';
+    els.push('<path d="' + fillPath + '" fill="' + accent + '" opacity="0.07"/>');
+
+    // Power curve line
+    var linePath = pts.map(function(p, i) {
+      return (i===0?'M':'L') + xS(p.n).toFixed(1) + ',' + yS(p.power).toFixed(1);
+    }).join(' ');
+    els.push('<path d="' + linePath + '" fill="none" stroke="' + accent + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>');
+
+    // Dot at current N
+    var dotX = xS(n).toFixed(1), dotY = yS(r.power).toFixed(1);
+    els.push('<circle cx="' + dotX + '" cy="' + dotY + '" r="6" fill="' + surf + '" stroke="' + accent + '" stroke-width="2"/>');
+    els.push('<circle cx="' + dotX + '" cy="' + dotY + '" r="3" fill="' + accent + '"/>');
+
+    // X axis baseline
+    els.push('<line x1="' + ml + '" y1="' + (H-mb) + '" x2="' + (W-mr) + '" y2="' + (H-mb) + '" stroke="' + muted + '" stroke-width="1" opacity="0.3"/>');
+
+    // X tick marks and labels
+    niceTicks(nLow, nHigh, 5).forEach(function(t) {
+      if (t < nLow || t > nHigh) return;
+      var x = xS(t).toFixed(1);
+      els.push('<line x1="' + x + '" y1="' + (H-mb) + '" x2="' + x + '" y2="' + (H-mb+4) + '" stroke="' + muted + '" stroke-width="1" opacity="0.35"/>');
+      els.push('<text x="' + x + '" y="' + (H-mb+17) + '" text-anchor="middle" font-size="11" fill="' + muted + '" font-family="IBM Plex Mono,monospace">' + fmtN(t) + '</text>');
+    });
+
+    // Y tick labels
+    [0, 0.2, 0.4, 0.6, 0.8, 1].forEach(function(t) {
+      var y = (yS(t) + 4).toFixed(1);
+      els.push('<text x="' + (ml-6) + '" y="' + y + '" text-anchor="end" font-size="11" fill="' + muted + '" font-family="IBM Plex Mono,monospace">' + Math.round(t*100) + '%</text>');
+    });
+
+    // Axis labels
+    els.push('<text x="' + (ml + pw/2).toFixed(1) + '" y="' + (H-4) + '" text-anchor="middle" font-size="11" fill="' + muted + '" font-family="IBM Plex Sans,sans-serif">Sample size N</text>');
+    els.push('<text x="' + (ml-34) + '" y="' + (mt + ph/2).toFixed(1) + '" text-anchor="middle" font-size="11" fill="' + muted + '" font-family="IBM Plex Sans,sans-serif" transform="rotate(-90,' + (ml-34) + ',' + (mt+ph/2).toFixed(1) + ')">Power</text>');
+
+    // Transparent hit area for tooltip
+    els.push('<rect id="chart-hit" x="' + ml + '" y="' + mt + '" width="' + pw.toFixed(1) + '" height="' + ph + '" fill="transparent" style="cursor:crosshair"/>');
+
+    g.innerHTML = els.join('');
+
+    // Store chart geometry for tooltip
+    svg._cd = { pts: pts, xS: xS, yS: yS, W: W, ml: ml, mr: mr, mt: mt, H: H, mb: mb };
+    attachTooltip(svg);
+  }
+
+  function attachTooltip(svg) {
+    var tip = document.getElementById('chart-tooltip');
+    if (!tip) return;
+
+    function nearest(mx) {
+      var cd = svg._cd;
+      if (!cd) return null;
+      var best = null, bestDx = Infinity;
+      cd.pts.forEach(function(p) {
+        var dx = Math.abs(cd.xS(p.n) - mx);
+        if (dx < bestDx) { bestDx = dx; best = p; }
+      });
+      return best;
+    }
+
+    function show(e) {
+      var cd = svg._cd;
+      if (!cd) return;
+      var rect = svg.getBoundingClientRect();
+      var mx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      if (mx < cd.ml || mx > cd.W - cd.mr) { tip.classList.remove('is-visible'); return; }
+      var p = nearest(mx);
+      if (!p) return;
+      tip.textContent = 'N = ' + fmtN(p.n) + ' power = ' + (100*p.power).toFixed(1) + '%';
+      tip.classList.add('is-visible');
+      var px = cd.xS(p.n), py = cd.yS(p.power);
+      var tw = tip.offsetWidth, th = tip.offsetHeight;
+      var left = px - tw/2, top = py - th - 10;
+      if (left < 0) left = 4;
+      if (left + tw > cd.W) left = cd.W - tw - 4;
+      if (top < 4) top = py + 14;
+      tip.style.left = left.toFixed(0) + 'px';
+      tip.style.top  = top.toFixed(0) + 'px';
+    }
+
+    svg.onmousemove  = show;
+    svg.ontouchmove  = show;
+    svg.onmouseleave = function() { tip.classList.remove('is-visible'); };
+  }
+
+  /* ---------- UI ---------- */
+
+  var $ = function(id) { return document.getElementById(id); };
+  var form = $('form'), result = $('result');
+  var elLabel = $('result-label'), elValue = $('result-value'), elBody = $('result-body');
+
+  var METHOD_HINTS = {
+    'exact':    'Valid for any N. Sums binomial probabilities exactly; achieved α ≤ nominal α due to discreteness.',
+    'score':    'Equivalent to requiring the one-sided Wilson score bound to exceed p₀. Needs N·p₀ and N·(1−p₀) both ≳ 10.',
+    'score-cc': 'Score test with ½ continuity correction: more conservative, closer to exact for small N. Needs N·p₀ and N·(1−p₀) both ≳ 10.'
+  };
+
+  function fmtP(x, d) {
+    if (x === 0) return '0';
+    if (x >= 1)  return '1';
+    if (x < 0.0001) return '<0.0001';
+    return x.toFixed(d || 3);
+  }
+  function fmtPct(x) { return (100*x).toFixed(1) + '%'; }
+  function fmtN(n) { return Number(n).toLocaleString('en-US'); }
+  function esc(s) { return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  function readInputs() {
+    var mode = form.querySelector('input[name="mode"]:checked').value;
+    var v = {
+      mode:   mode,
+      p0:     parseFloat($('p0').value),
+      p1:     parseFloat($('p1').value),
+      alpha:  parseFloat($('alpha').value),
+      target: parseFloat($('power').value),
+      n:      parseInt($('n').value, 10),
+      method: $('method').value
+    };
+    var errs = [];
+    if (!(v.p0 > 0 && v.p0 < 1)) errs.push('Performance threshold must be between 0 and 1 (exclusive).');
+    if (!(v.p1 > 0 && v.p1 <= 1)) errs.push('Expected proportion must be between 0 and 1.');
+    if (v.p0>0 && v.p0<1 && v.p1>0 && v.p1<=1 && v.p1 <= v.p0) errs.push('Expected proportion must exceed the threshold — this one-sided test only detects improvement.');
+    if (!(v.alpha > 0 && v.alpha < 1)) errs.push('Significance level must be between 0 and 1.');
+    if (mode === 'n' && !(v.target > 0 && v.target < 1)) errs.push('Target power must be between 0 and 1.');
+    if (mode === 'power' && !(Number.isInteger(v.n) && v.n >= 1 && v.n <= 1000000)) errs.push('Number of responses must be a whole number from 1 to 1,000,000.');
+    v.errors = errs;
+    return v;
+  }
+
+  function nearbyRows(n, calcAt) {
+    var factors = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    var seen = {}, rows = [];
+    factors.forEach(function(f) {
+      var m = Math.max(1, Math.round(n * f));
+      if (seen[m]) return;
+      seen[m] = true;
+      var r = calcAt(m);
+      r.current = (m === n);
+      rows.push(r);
+    });
+    return rows;
+  }
+
+  function renderError(msgs) {
+    result.classList.add('is-error');
+    elLabel.textContent = 'Check the inputs';
+    elValue.textContent = '—';
+    elBody.innerHTML = msgs.map(function(m) { return '<p class="result-error">' + esc(m) + '</p>'; }).join('');
+    chartState = null;
+  }
+
+  function syncMode() {
+    var mode = form.querySelector('input[name="mode"]:checked').value;
+    $('field-power').classList.toggle('is-hidden', mode !== 'n');
+    $('field-n').classList.toggle('is-hidden', mode !== 'power');
+    $('method-hint').textContent = METHOD_HINTS[$('method').value] || '';
+  }
+
+  function render() {
+    var v = readInputs();
+    if (v.errors.length) { renderError(v.errors); return; }
+    result.classList.remove('is-error');
+
+    var calcAt = function(m) {
+      if (v.method === 'exact')    return exactAt(m, v.p0, v.p1, v.alpha);
+      if (v.method === 'score-cc') return scoreCCAt(m, v.p0, v.p1, v.alpha);
+      return scoreAt(m, v.p0, v.p1, v.alpha);
+    };
+
+    var r, headline;
+
+    if (v.mode === 'n') {
+      if      (v.method === 'exact')    r = sampleSizeExact(v.p0, v.p1, v.alpha, v.target);
+      else if (v.method === 'score-cc') r = sampleSizeScoreCC(v.p0, v.p1, v.alpha, v.target);
+      else                              r = sampleSizeScore(v.p0, v.p1, v.alpha, v.target);
+      if (!r) { renderError(['No sample size up to ' + fmtN(N_MAX) + ' reaches that power. Try raising p₁ or lowering the target power.']); return; }
+      elLabel.textContent = 'Responses needed';
+      elValue.innerHTML   = fmtN(r.n) + '<small>for ' + fmtPct(r.power) + ' power</small>';
+      headline = 'Judge <b>' + fmtN(r.n) + '</b> responses. If at least <b>' + fmtN(r.crit) + '</b> (' + fmtPct(r.crit/r.n) + ') are acceptable, conclude the true rate exceeds ' + esc(v.p0) + '.';
+    } else {
+      r = calcAt(v.n);
+      elLabel.textContent = 'Power';
+      elValue.innerHTML   = fmtPct(r.power) + '<small>with N = ' + fmtN(r.n) + '</small>';
+      headline = r.crit > r.n
+        ? 'With <b>' + fmtN(r.n) + '</b> responses the test cannot reject H₀ at α = ' + esc(v.alpha) + '. Increase N.'
+        : 'If at least <b>' + fmtN(r.crit) + '</b> of <b>' + fmtN(r.n) + '</b> (' + fmtPct(r.crit/r.n) + ') are acceptable, conclude the true rate exceeds ' + esc(v.p0) + '.';
+    }
+
+    var exact    = v.method === 'exact';
+    var scoreCC  = v.method === 'score-cc';
+    var alphaLabel = exact ? 'Achieved α' : scoreCC ? 'Approx. achieved α' : 'Nominal α';
+    var alphaNote  = exact ? ' (nominal ' + esc(v.alpha) + ')' : scoreCC ? ' (nominal ' + esc(v.alpha) + ')' : '';
+    var methodName = exact ? 'exact binomial' : scoreCC ? 'score + continuity correction' : 'score (Wilson) z-test';
+
+    var html = '<p class="decision">' + headline + '</p>';
+    html += '<dl class="stats">';
+    html += '<dt>Hypotheses</dt><dd>H₀: p ≤ ' + esc(v.p0) + ' vs H₁: p &gt; ' + esc(v.p0) + '</dd>';
+    html += '<dt>Planning alternative</dt><dd>p₁ = ' + esc(v.p1) + '</dd>';
+    html += '<dt>Critical count</dt><dd>' + (r.crit > r.n ? 'none' : 'X ≥ ' + fmtN(r.crit)) + '</dd>';
+    html += '<dt>' + alphaLabel + '</dt><dd>' + fmtP(r.alpha, 4) + alphaNote + '</dd>';
+    html += '<dt>Power at p₁</dt><dd>' + fmtP(r.power, 4) + '</dd>';
+    html += '<dt>Method</dt><dd>' + methodName + '</dd>';
+    html += '</dl>';
+
+    if (!exact) {
+      var small = Math.min(r.n * v.p0, r.n * (1 - v.p0));
+      if (small < 10) {
+        var which = (r.n * v.p0 < r.n * (1-v.p0)) ? 'p₀' : '(1−p₀)';
+        html += '<p class="result-error" style="margin-top:12px">N·' + which + ' = ' + small.toFixed(1) + ' is below 10 — the normal approximation is unreliable here. Switch to the exact test.</p>';
+      }
+    }
+
+    var rows = nearbyRows(r.n, calcAt);
+    var aHdr = exact ? 'Achieved α' : scoreCC ? 'Approx. α' : 'α';
+    html += '<div class="nearby"><h3>Power at nearby sample sizes</h3><div class="table-wrap"><table><thead><tr><th>N</th><th>Critical count</th><th>' + aHdr + '</th><th>Power</th></tr></thead><tbody>';
+    rows.forEach(function(row) {
+      html += '<tr' + (row.current ? ' class="is-current"' : '') + '><td>' + fmtN(row.n) + '</td><td>' + (row.crit > row.n ? '—' : 'X ≥ ' + fmtN(row.crit)) + '</td><td>' + fmtP(row.alpha, 4) + '</td><td>' + fmtP(row.power, 3) + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+
+    elBody.innerHTML = html;
+
+    // Update chart subtitle
+    var mLabel = exact ? 'exact binomial' : scoreCC ? 'score + CC' : 'score (Wilson)';
+    var sub = v.mode === 'n'
+      ? mLabel + ' power at each N; dashed line = target ' + fmtPct(v.target) + '; N = ' + fmtN(r.n) + ' highlighted'
+      : mLabel + ' power at each N; N = ' + fmtN(r.n) + ' highlighted (' + fmtPct(r.power) + ')';
+    $('chart-sub').textContent = sub;
+
+    chartState = { r: r, v: v };
+    drawChart();
+  }
+
+  form.addEventListener('input',  function() { syncMode(); render(); });
+  form.addEventListener('change', function() { syncMode(); render(); });
+  form.addEventListener('submit', function(e) { e.preventDefault(); });
+
+  // Redraw chart on container resize
+  if (window.ResizeObserver) {
+    new ResizeObserver(drawChart).observe(document.getElementById('chart-wrap'));
+  } else {
+    window.addEventListener('resize', drawChart);
+  }
+
+  syncMode();
+  render();
+})();
+</script>
+</body>
+</html>
