@@ -361,6 +361,16 @@ crit  = ⌈ N·p₀ + z_α·√(N·p₀q₀) ⌉</pre>
   </aside>
 </div>
 
+<div class="chart-section" id="beta-section">
+  <div class="chart-head">
+    <p class="chart-label">Question difficulty distribution</p>
+    <p class="chart-sub" id="beta-sub"></p>
+  </div>
+  <div class="chart-wrap" id="beta-wrap">
+    <svg id="beta-chart" width="100%" height="200" role="img" aria-label="Beta distribution of per-question acceptable-response rates"><g id="beta-g"></g></svg>
+  </div>
+</div>
+
 <div class="chart-section" id="chart2-section">
   <div class="chart-head">
     <p class="chart-label">Power vs. questions (n)</p>
@@ -444,6 +454,15 @@ function qnorm(p){
   else if(p<=ph){q=p-0.5;r=q*q;x=(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
   else{q=Math.sqrt(-2*Math.log(1-p));x=-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
   var e=normCdf(x)-p,u=e*Math.sqrt(2*Math.PI)*Math.exp(x*x/2);return x-u/(1+x*u/2);
+}
+
+// Log-gamma via Lanczos 6-term approximation (Numerical Recipes, §6.1).
+function lgamma(x){
+  var c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,1.208650973866179e-3,-5.395239384953e-6];
+  var y=x,tmp=x+5.5;tmp-=(x+0.5)*Math.log(tmp);
+  var ser=1.000000000190015;
+  for(var j=0;j<6;j++)ser+=c[j]/++y;
+  return-tmp+Math.log(2.5066282746310005*ser/x);
 }
 
 // Upper binomial tail P(X>=c) in log-space.
@@ -695,6 +714,64 @@ function drawChart2(){
   var legBB=$('leg-bb');if(legBB)legBB.style.background=css('--accent');
 }
 
+function drawBetaChart(){
+  var svg=$('beta-chart'),g=$('beta-g');
+  if(!svg||!g)return;
+  var p1=parseFloat($('b-p1').value),rho=parseFloat($('b-rho').value);
+  if(isNaN(p1)||isNaN(rho)||p1<=0||p1>=1||rho<0||rho>=1){g.innerHTML='';return;}
+  var phi=rhoToPhi(rho),a=p1*phi,b=(1-p1)*phi;
+  var logBab=lgamma(a)+lgamma(b)-lgamma(a+b);
+  var W=svg.getBoundingClientRect().width;if(W<60)return;
+  var H=200,mt=14,mb=40,ml=10,mr=10,pw=W-ml-mr,ph=H-mt-mb;
+  var muted=css('--muted'),rule=css('--rule'),accent=css('--accent');
+  // Evaluate PDF at 300 linearly-spaced points on (0.001, 0.999)
+  var nPts=300,pts=[],ii,x,fy;
+  for(ii=0;ii<nPts;ii++){
+    x=0.001+0.998*ii/(nPts-1);
+    fy=Math.exp((a-1)*Math.log(x)+(b-1)*Math.log(1-x)-logBab);
+    pts.push({x:x,y:isFinite(fy)?fy:1e15});
+  }
+  // Clip display y at 95th-percentile density (handles J/U-shape singularities)
+  var sorted=pts.map(function(p){return p.y;}).filter(isFinite).sort(function(aa,bb){return aa-bb;});
+  var yMax=Math.max(sorted[Math.floor(sorted.length*0.95)]*1.15,1e-6);
+  var xS=function(v){return ml+v*pw;};
+  var yS=function(v){return mt+ph*(1-Math.min(Math.max(v,0)/yMax,1));};
+  var els=[];
+  // grid
+  [0,0.5,1].forEach(function(t){
+    var y=yS(t*yMax).toFixed(1);
+    els.push('<line x1="'+ml+'" y1="'+y+'" x2="'+(W-mr)+'" y2="'+y+'" stroke="'+rule+'" stroke-width="1"/>');
+  });
+  // x axis
+  els.push('<line x1="'+ml+'" y1="'+(H-mb)+'" x2="'+(W-mr)+'" y2="'+(H-mb)+'" stroke="'+muted+'" stroke-width="1" opacity="0.35"/>');
+  // area fill
+  var fill=pts.map(function(p,jj){return(jj===0?'M':'L')+xS(p.x).toFixed(1)+','+yS(p.y).toFixed(1);}).join(' ');
+  fill+=' L'+xS(pts[pts.length-1].x).toFixed(1)+','+(H-mb)+' L'+xS(pts[0].x).toFixed(1)+','+(H-mb)+' Z';
+  els.push('<path d="'+fill+'" fill="'+accent+'" opacity="0.10"/>');
+  // curve
+  var path=pts.map(function(p,jj){return(jj===0?'M':'L')+xS(p.x).toFixed(1)+','+yS(p.y).toFixed(1);}).join(' ');
+  els.push('<path d="'+path+'" fill="none" stroke="'+accent+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>');
+  // mean vertical
+  var mx=xS(p1).toFixed(1);
+  els.push('<line x1="'+mx+'" y1="'+mt+'" x2="'+mx+'" y2="'+(H-mb)+'" stroke="'+accent+'" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.7"/>');
+  // x ticks
+  [0,0.25,0.5,0.75,1].forEach(function(t){
+    var tx=xS(t).toFixed(1);
+    els.push('<line x1="'+tx+'" y1="'+(H-mb)+'" x2="'+tx+'" y2="'+(H-mb+4)+'" stroke="'+muted+'" stroke-width="1" opacity="0.4"/>');
+    els.push('<text x="'+tx+'" y="'+(H-mb+16)+'" text-anchor="middle" font-size="11" fill="'+muted+'" font-family="IBM Plex Mono,monospace">'+t+'</text>');
+  });
+  // mean label (anchor switches near edges)
+  var anchor=p1>0.75?'end':p1<0.25?'start':'middle';
+  els.push('<text x="'+mx+'" y="'+(mt+12)+'" text-anchor="'+anchor+'" font-size="11" fill="'+accent+'" font-family="IBM Plex Mono,monospace">μ='+p1.toFixed(2)+'</text>');
+  // x-axis label
+  els.push('<text x="'+(ml+pw/2).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="11" fill="'+muted+'" font-family="IBM Plex Sans,sans-serif">question difficulty p</text>');
+  g.innerHTML=els.join('');
+  // subtitle
+  var shape=a>=1&&b>=1?'unimodal':a<1&&b<1?'bimodal (high variability)':a<1?'peak near p=0 (hard questions)':'peak near p=1 (easy questions)';
+  var sub=$('beta-sub');
+  if(sub)sub.textContent='Beta(αβ​='+a.toFixed(2)+', ββ​='+b.toFixed(2)+')  —  φ='+phi.toFixed(1)+',  ρ='+rho.toFixed(3)+'  ['+shape+']';
+}
+
 /* ─────────────────── tab 1 UI ─────────────────── */
 
 var METHOD_HINTS={
@@ -898,7 +975,7 @@ function render2(){
 
   var modeLabel=v.mode==='n'?'dashed = target '+fmtPct(v.target)+'; n = '+fmtN(r.n)+' highlighted':'n = '+fmtN(r.n)+' highlighted';
   $('chart2-sub').textContent='ρ = '+v.rho+', k = '+v.k+', VIF = '+vif.toFixed(2)+';  '+modeLabel;
-  chart2State={r:r,v:v};drawChart2();
+  chart2State={r:r,v:v};drawBetaChart();drawChart2();
 }
 
 /* ─────────────────── setup ─────────────────── */
@@ -934,7 +1011,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     btn.classList.add('is-active');btn.setAttribute('aria-selected','true');
     var target=btn.getAttribute('aria-controls');$(target).classList.add('is-active');
     // Redraw chart for newly visible tab
-    if(target==='tab1')drawChart();else drawChart2();
+    if(target==='tab1')drawChart();else{drawBetaChart();drawChart2();}
   });
 });
 
@@ -942,8 +1019,9 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
 if(window.ResizeObserver){
   new ResizeObserver(drawChart).observe($('chart-wrap'));
   new ResizeObserver(drawChart2).observe($('chart2-wrap'));
+  new ResizeObserver(drawBetaChart).observe($('beta-wrap'));
 }else{
-  window.addEventListener('resize',function(){drawChart();drawChart2();});
+  window.addEventListener('resize',function(){drawChart();drawChart2();drawBetaChart();});
 }
 
 // Init
