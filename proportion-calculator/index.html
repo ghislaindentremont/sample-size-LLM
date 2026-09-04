@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One-Proportion Power Calculator</title>
+<meta name="description" content="Analytic sample size and power for one-sided single-proportion tests — Wilson score and Clopper-Pearson exact. Includes copy-ready R and Python code.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500&display=swap">
+<style>
+:root {
+  --bg:#F5F7F8; --surface:#FFFFFF; --ink:#17202A; --muted:#5B6672; --rule:#D5DCE1;
+  --accent:#0F766E; --accent-ink:#0A5A54; --accent-tint:#E4F2EF;
+  --s2:#B45309; --s2-tint:#FEF3C7; --danger:#B4432F; --danger-tint:#F9ECE9;
+  --focus:#0F766E;
+  --sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1417;--surface:#161C21;--ink:#E4E9EC;--muted:#9AA6B0;--rule:#28323A;
+  --accent:#3DB8AB;--accent-ink:#7ED9CE;--accent-tint:#15302E;
+  --s2:#F59E0B;--s2-tint:#2D1900;--danger:#E07A66;--danger-tint:#33201C;--focus:#3DB8AB;color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0F1417;--surface:#161C21;--ink:#E4E9EC;--muted:#9AA6B0;--rule:#28323A;
+  --accent:#3DB8AB;--accent-ink:#7ED9CE;--accent-tint:#15302E;
+  --s2:#F59E0B;--s2-tint:#2D1900;--danger:#E07A66;--danger-tint:#33201C;--focus:#3DB8AB;color-scheme:dark;
+}
+*{box-sizing:border-box;}
+html{font-size:16px;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased;}
+a{color:var(--accent-ink);}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+.page{max-width:1080px;margin:0 auto;padding:40px 24px 80px;}
+
+header{margin-bottom:36px;}
+.eyebrow{font-family:var(--mono);font-size:0.75rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;}
+h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.7rem,3.2vw,2.3rem);line-height:1.15;margin:0 0 12px;text-wrap:balance;max-width:30ch;}
+.lede{max-width:68ch;margin:0;color:var(--muted);font-size:1.02rem;}
+.lede b{color:var(--ink);font-weight:500;}
+
+.calc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px;align-items:start;margin-top:36px;}
+@media(max-width:800px){.calc{grid-template-columns:1fr;}}
+
+.mode{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin-bottom:24px;background:var(--surface);}
+.mode label{position:relative;display:block;padding:12px 14px;cursor:pointer;text-align:center;font-weight:500;color:var(--muted);border-right:1px solid var(--rule);}
+.mode label:last-child{border-right:0;}
+.mode input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer;}
+.mode label:has(input:checked){background:var(--accent);color:#fff;}
+.mode small{display:block;font-weight:400;font-size:0.8rem;opacity:0.85;}
+
+.fields{display:grid;gap:18px;}
+.field{display:grid;gap:6px;}
+.field label{font-weight:500;}
+.field .hint{color:var(--muted);font-size:0.86rem;margin:0;}
+.field input{font:500 1rem var(--mono);color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:10px 12px;width:100%;max-width:220px;}
+.field.is-hidden{display:none;}
+
+/* result panel */
+.result-panel{position:sticky;top:24px;background:var(--surface);border:1px solid var(--rule);border-radius:8px;overflow:hidden;}
+.rp-head{padding:20px 24px 18px;border-bottom:1px solid var(--rule);background:var(--accent-tint);}
+.rp-label{font-family:var(--mono);font-size:0.75rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent-ink);margin:0 0 6px;}
+.rp-body{padding:18px 24px 22px;}
+.result-panel.is-error .rp-head{background:var(--danger-tint);}
+.result-panel.is-error .rp-label{color:var(--danger);}
+.result-error{margin:0;color:var(--danger);}
+
+/* comparison table */
+.cmp{width:100%;border-collapse:collapse;margin:0 0 14px;}
+.cmp th{text-align:right;padding:7px 10px;font-size:0.78rem;font-weight:600;color:var(--muted);border-bottom:2px solid var(--rule);}
+.cmp th:first-child{text-align:left;}
+.cmp th.wilson{color:var(--accent-ink);}
+.cmp th.cp{color:var(--s2);}
+.cmp td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:0.9rem;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.cmp td:first-child{text-align:left;font-family:var(--sans);color:var(--muted);font-size:0.83rem;font-variant-numeric:normal;}
+.cmp tr:last-child td{border-bottom:0;}
+.cmp td.w{color:var(--accent-ink);font-weight:500;}
+.cmp td.c{color:var(--s2);font-weight:500;}
+
+.decision{font-size:0.95rem;margin:0 0 14px;}
+.decision b{font-family:var(--mono);font-weight:500;}
+
+.note{margin-top:14px;background:var(--s2-tint);border-left:3px solid var(--s2);border-radius:0 6px 6px 0;padding:10px 14px;font-size:0.875rem;color:var(--ink);}
+.note b{font-weight:600;}
+
+/* code section */
+.code-section{margin-top:32px;background:var(--surface);border:1px solid var(--rule);border-radius:8px;overflow:hidden;}
+.cs-head{display:flex;align-items:center;gap:10px;padding:14px 20px 12px;border-bottom:1px solid var(--rule);flex-wrap:wrap;}
+.cs-title{font-family:var(--mono);font-size:0.75rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin:0;}
+.lang-tabs{display:flex;gap:4px;}
+.lang-tab{background:none;border:1px solid var(--rule);border-radius:4px;padding:4px 14px;font-family:var(--mono);font-size:0.82rem;font-weight:500;color:var(--muted);cursor:pointer;}
+.lang-tab.is-active{background:var(--ink);color:var(--bg);border-color:var(--ink);}
+.copy-btn{margin-left:auto;background:none;border:1px solid var(--rule);border-radius:4px;padding:4px 14px;font-family:var(--sans);font-size:0.82rem;color:var(--muted);cursor:pointer;transition:border-color 120ms,color 120ms;}
+.copy-btn:hover{border-color:var(--accent-ink);color:var(--accent-ink);}
+.copy-btn.copied{border-color:var(--accent);color:var(--accent-ink);}
+pre.code-block{margin:0;padding:20px 24px;font-family:var(--mono);font-size:0.82rem;line-height:1.7;overflow-x:auto;background:var(--surface);color:var(--ink);white-space:pre;}
+pre.code-block.is-hidden{display:none;}
+.cm{color:var(--muted);}
+
+/* prose */
+.prose{max-width:66ch;margin-top:64px;}
+.prose h2{font-family:var(--serif);font-weight:500;font-size:1.45rem;margin:0 0 12px;text-wrap:balance;}
+.prose section+section{margin-top:44px;}
+.prose p{margin:0 0 14px;}
+.prose p:last-child{margin-bottom:0;}
+.prose code{font-family:var(--mono);font-size:0.92em;}
+.formula{font-family:var(--mono);font-size:0.88rem;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:12px 16px;margin:10px 0 14px;overflow-x:auto;white-space:pre;}
+.callout{background:var(--accent-tint);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:12px 16px;margin:0 0 16px;font-size:0.96rem;}
+.callout.warn{background:var(--s2-tint);border-color:var(--s2);}
+.callout.danger{background:var(--danger-tint);border-color:var(--danger);}
+.callout b{font-weight:600;}
+dl.assume{margin:0;display:grid;gap:16px;}
+dl.assume dt{font-weight:600;}
+dl.assume dd{margin:2px 0 0;}
+dl.assume dd .why{color:var(--muted);}
+footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--rule);color:var(--muted);font-size:0.86rem;max-width:66ch;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <p class="eyebrow">Analytic power &amp; sample size · One-sided proportion test</p>
+  <h1>Sample size &amp; power for a single-proportion test</h1>
+  <p class="lede">Evaluate whether the true acceptable-response rate of an LLM exceeds a threshold p₀. Two methods: <b>Wilson score</b> (closed-form normal approximation) and <b>Clopper-Pearson exact</b> (exact binomial, no approximation). Both are computed analytically — not by simulation. Copy-ready R and Python code is generated for every result.</p>
+</header>
+
+<div class="calc">
+  <form id="form" autocomplete="off" novalidate>
+    <div class="mode" role="radiogroup" aria-label="Calculation mode">
+      <label><input type="radio" name="mode" value="n" checked>Sample size<small>from a target power</small></label>
+      <label><input type="radio" name="mode" value="power">Power<small>from a fixed N</small></label>
+    </div>
+    <div class="fields">
+      <div class="field">
+        <label for="p0">Performance threshold (p₀)</label>
+        <input id="p0" type="number" min="0.001" max="0.999" step="0.01" value="0.90" inputmode="decimal">
+        <p class="hint">Null hypothesis: true acceptable rate ≤ p₀.</p>
+      </div>
+      <div class="field">
+        <label for="p1">Expected proportion (p₁)</label>
+        <input id="p1" type="number" min="0.001" max="1" step="0.01" value="0.95" inputmode="decimal">
+        <p class="hint">Your best estimate of the true rate. Must exceed p₀.</p>
+      </div>
+      <div class="field">
+        <label for="alpha">Significance level (α)</label>
+        <input id="alpha" type="number" min="0.0001" max="0.5" step="0.01" value="0.05" inputmode="decimal">
+        <p class="hint">One-sided. Probability of a false positive.</p>
+      </div>
+      <div class="field" id="field-target">
+        <label for="target">Target power (1 − β)</label>
+        <input id="target" type="number" min="0.01" max="0.9999" step="0.05" value="0.80" inputmode="decimal">
+        <p class="hint">Probability of detecting p₁ when it is the true rate.</p>
+      </div>
+      <div class="field is-hidden" id="field-n">
+        <label for="n">Sample size (N)</label>
+        <input id="n" type="number" min="1" max="100000" step="1" value="184" inputmode="numeric">
+        <p class="hint">Number of responses to evaluate.</p>
+      </div>
+    </div>
+  </form>
+
+  <aside class="result-panel" id="result-panel" aria-live="polite">
+    <div class="rp-head" id="rp-head">
+      <p class="rp-label" id="rp-label">Result</p>
+    </div>
+    <div class="rp-body" id="rp-body"></div>
+  </aside>
+</div>
+
+<div class="code-section">
+  <div class="cs-head">
+    <p class="cs-title">Reproduce this result</p>
+    <div class="lang-tabs" role="tablist">
+      <button class="lang-tab is-active" role="tab" data-lang="r" aria-selected="true">R</button>
+      <button class="lang-tab" role="tab" data-lang="py" aria-selected="false">Python</button>
+    </div>
+    <button class="copy-btn" id="copy-btn">Copy</button>
+  </div>
+  <pre class="code-block" id="code-r"></pre>
+  <pre class="code-block is-hidden" id="code-py"></pre>
+</div>
+
+<div class="prose">
+
+<section>
+  <h2>Analytic vs. Monte Carlo: what the calculator actually does</h2>
+  <p>When you run a Monte Carlo simulation to estimate power — drawing thousands of random samples and counting how often the test rejects — you are approximating a number that can be computed exactly. This calculator computes that number directly, without any simulation.</p>
+  <p><b>For the Clopper-Pearson exact method,</b> the calculation is genuinely exact. The critical count <span class="m">c</span> is the smallest integer such that <span class="m">P(X ≥ c | Bin(N, p₀)) ≤ α</span>, found by summing exact binomial probabilities. Power is then <span class="m">P(X ≥ c | Bin(N, p₁))</span>, also an exact sum. In R this is one line: <code>1 - pbinom(c - 1, N, p1)</code>. The Monte Carlo simulation, if run long enough, converges to this same number — the analytic formula simply skips the simulation and gives it directly.</p>
+  <p><b>For the Wilson score method,</b> the analytic formula is a normal (CLT) approximation to the same quantity. The sample size formula is</p>
+  <pre class="formula">N = ⌈ ( z_α · √(p₀q₀) + z_β · √(p₁q₁) )² / (p₁ − p₀)² ⌉</pre>
+  <p>and the power formula at a given N is</p>
+  <pre class="formula">power = Φ( ( (p₁ − p₀) · √N  −  z_α · √(p₀q₀) ) / √(p₁q₁) )</pre>
+  <p>A simulation using the Wilson score CI will converge to a slightly different value, because the actual Wilson CI is discrete (it tests an exact count), while the formula above treats the problem continuously. The gap is typically 1–3 percentage points for the sample sizes relevant to LLM evaluation. When in doubt, the CP exact method requires no approximation and should be preferred.</p>
+  <div class="callout"><b>Why not just simulate?</b> Simulation with 10 000 replicates has a standard error of roughly √(0.8 × 0.2 / 10 000) ≈ 0.4 pp near 80% power. The analytic formulas are exact (CP) or have negligible error (Wilson) and run in milliseconds. Simulation is valuable for validating a specific test implementation; the analytic formulas are the right tool for planning.</div>
+</section>
+
+<section>
+  <h2>Why <code>pwr.p.test()</code> gives a different answer</h2>
+  <p>The <code>pwr</code> package in R uses Cohen's h, an arcsine-transformation effect size:</p>
+  <pre class="formula">h = 2 · arcsin(√p₁) − 2 · arcsin(√p₀)</pre>
+  <p>and the sample size formula <span class="m">N = ⌈(z_α + z_β)² / h²⌉</span>. For p₀ = 0.90, p₁ = 0.95, α = 0.05, one-sided, this gives <b>N = 167</b>.</p>
+  <p>However, at N = 167, the Wilson score test achieves only <b>75.8% power</b> and the CP exact test achieves <b>78.4% power</b> — not the 80% that was targeted. The correct sample sizes using Wilson and CP are <b>N = 184</b> and <b>N = 179</b> respectively.</p>
+  <div class="callout warn"><b>The arcsine approximation underestimates the required sample size</b> when p is far from 0.5. It was designed as a variance-stabilizing transformation and works well near p = 0.5, but it becomes increasingly inaccurate as p approaches 0 or 1. For proportions above 0.90, the Wilson or CP formulas should be used.</div>
+  <p>If you ran a simulation at N = 167 and observed power near 78%, that simulation was correctly reflecting that N = 167 is underpowered for the Wilson and CP tests at the 80% target. The <code>pwr</code> result was the source of the discrepancy, not the simulation.</p>
+</section>
+
+<section>
+  <h2>Which method to report</h2>
+  <p>For clinical or regulatory submissions, the <b>CP exact</b> method is preferred because the type I error is guaranteed to be at or below the nominal α — there is no approximation. The achieved α is typically slightly below the nominal (e.g., 4.9% instead of 5%), which is conservative. For general planning where a closed-form formula is needed (e.g., to present sample size derivation in a grant), the <b>Wilson score</b> method is the standard modern choice; it is uniformly better than the arcsine method for proportions near the boundaries.</p>
+</section>
+
+<section>
+  <h2>Assumptions</h2>
+  <dl class="assume">
+    <div><dt>Responses are independent.</dt><dd>Each judgment is a separate, independent Bernoulli trial. <span class="why">Multiple responses to the same prompt, or multi-turn conversations, violate independence and reduce effective N below the nominal count. Use the Beta-Binomial calculator if responses are clustered by question.</span></dd></div>
+    <div><dt>The rubric is fixed before data collection.</dt><dd>Acceptable/not-acceptable criteria are defined and locked before any responses are seen. <span class="why">Post-hoc rubric changes make the observed rate uninterpretable.</span></dd></div>
+    <div><dt>Prompts are a representative sample from the target population.</dt><dd><span class="why">If your prompts are easier or differently distributed than real-world queries, the estimated rate applies to your prompt set, not deployment traffic.</span></dd></div>
+    <div><dt>N is fixed before data collection.</dt><dd><span class="why">Sequential stopping rules or interim analyses alter the type I error unless explicitly accounted for.</span></dd></div>
+    <div><dt>Judgments are accurate.</dt><dd><span class="why">Rater disagreement or lenient grading shifts the observed proportion. Measure and report inter-rater agreement separately.</span></dd></div>
+  </dl>
+</section>
+
+</div>
+
+<footer>
+  All calculations run in your browser — nothing is sent anywhere. The R and Python code blocks above reproduce every result exactly and can be pasted directly into a session to verify independently.
+  <br><br>
+  Related: <a href="../index.html">Beta-Binomial calculator</a> for clustered designs (k responses per question).
+</footer>
+
+</div><!-- /page -->
+
+<script>
+(function(){
+'use strict';
+
+/* ── numerics (same implementations as main calculator) ── */
+function erfc(x){
+  var z=Math.abs(x),t=1/(1+0.5*z);
+  var r=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+t*(-0.82215223+t*0.17087277)))))))));
+  return x>=0?r:2-r;
+}
+function normCdf(x){return 0.5*erfc(-x/Math.SQRT2);}
+function qnorm(p){
+  var a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  var b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  var c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  var d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  var pl=0.02425,ph=1-pl,q,r,x;
+  if(p<pl){q=Math.sqrt(-2*Math.log(p));x=(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  else if(p<=ph){q=p-0.5;r=q*q;x=(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+  else{q=Math.sqrt(-2*Math.log(1-p));x=-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  var e=normCdf(x)-p,u=e*Math.sqrt(2*Math.PI)*Math.exp(x*x/2);return x-u/(1+x*u/2);
+}
+function upperTail(n,c,p){
+  if(c>n)return 0;if(c<=0)return 1;if(p===0)return 0;if(p===1)return 1;
+  var logR=Math.log(1-p)-Math.log(p),logPmf=n*Math.log(p),s=Math.exp(logPmf);
+  for(var k=n;k>c;k--){logPmf+=Math.log(k/(n-k+1))+logR;s+=Math.exp(logPmf);}
+  return Math.min(1,s);
+}
+function critExact(n,p0,alpha){
+  var logR=Math.log(1-p0)-Math.log(p0),logPmf=n*Math.log(p0),s=Math.exp(logPmf);
+  if(s>alpha)return n+1;
+  for(var k=n;k>=1;k--){logPmf+=Math.log(k/(n-k+1))+logR;var pmf=Math.exp(logPmf);if(s+pmf>alpha)return k;s+=pmf;}
+  return 0;
+}
+
+/* ── test methods ── */
+function cpAt(N,p0,p1,alpha){
+  var c=critExact(N,p0,alpha);
+  return{N:N,crit:c,alpha:upperTail(N,c,p0),power:upperTail(N,c,p1)};
+}
+function cpSampleSize(p0,p1,alpha,target){
+  for(var N=1;N<=100000;N++){var r=cpAt(N,p0,p1,alpha);if(r.power>=target)return r;}
+  return null;
+}
+function wilsonAt(N,p0,p1,alpha){
+  var za=qnorm(1-alpha),s0=Math.sqrt(p0*(1-p0)),s1=Math.sqrt(p1*(1-p1));
+  var crit=Math.min(Math.ceil(N*p0+za*Math.sqrt(N)*s0),N+1);
+  var power=s1===0?(p1>p0?1:0):normCdf(((p1-p0)*Math.sqrt(N)-za*s0)/s1);
+  return{N:N,crit:crit,alpha:alpha,power:Math.max(0,power)};
+}
+function wilsonSampleSize(p0,p1,alpha,target){
+  var za=qnorm(1-alpha),zb=qnorm(target),s0=Math.sqrt(p0*(1-p0)),s1=Math.sqrt(p1*(1-p1));
+  var N=Math.max(1,Math.ceil(Math.pow((za*s0+zb*s1)/(p1-p0),2)));
+  return wilsonAt(N,p0,p1,alpha);
+}
+
+/* ── formatting ── */
+var $=function(id){return document.getElementById(id);};
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function fN(n){return Number(n).toLocaleString('en-US');}
+function fP(x){return(100*x).toFixed(1)+'%';}
+function fV(x,d){return x.toFixed(d===undefined?4:d);}
+function fR(x,d){return x.toFixed(d===undefined?4:d);}  // for code comments
+
+/* ── code generation ── */
+function genR(v,rW,rE){
+  var p0=v.p0,p1=v.p1,al=v.alpha;
+  var za=qnorm(1-al),s0=Math.sqrt(p0*(1-p0)),s1=Math.sqrt(p1*(1-p1));
+  var L=[];
+  var c='# ';
+  L.push(c+'── Parameters ─────────────────────────────────────────────────────────');
+  L.push('p0    <- '+p0+'   '+c+'performance threshold (H₀: p ≤ p₀)');
+  L.push('p1    <- '+p1+'   '+c+'expected proportion (H₁: p = p₁)');
+  L.push('alpha <- '+al+'  '+c+'one-sided significance level');
+  if(v.mode==='n') L.push('target <- '+v.target+'  '+c+'target power');
+  else             L.push('N <- '+v.n+'L      '+c+'fixed sample size');
+  L.push('');
+  L.push(c+'── Wilson score method ────────────────────────────────────────────────');
+  L.push('za <- qnorm(1 - alpha)      '+c+fR(za));
+  L.push('s0 <- sqrt(p0 * (1 - p0))  '+c+fR(s0,4)+' (null SE)');
+  L.push('s1 <- sqrt(p1 * (1 - p1))  '+c+fR(s1,4)+' (alt SE)');
+  L.push('');
+  if(v.mode==='n'){
+    var zb=qnorm(v.target);
+    L.push('zb <- qnorm(target)         '+c+fR(zb));
+    L.push('');
+    L.push('N_w  <- ceiling(((za * s0 + zb * s1) / (p1 - p0))^2)  '+c+rW.N);
+    L.push('c_w  <- ceiling(N_w * p0 + za * sqrt(N_w) * s0)        '+c+rW.crit);
+    L.push('pw_w <- pnorm(((p1 - p0) * sqrt(N_w) - za * s0) / s1)  '+c+fR(rW.power));
+    L.push('');
+    L.push('cat(sprintf("Wilson: N = %d, reject if X >= %d, power = %.4f\\n",');
+    L.push('            N_w, c_w, pw_w))');
+  } else {
+    L.push('c_w  <- ceiling(N * p0 + za * sqrt(N) * s0)        '+c+rW.crit);
+    L.push('pw_w <- pnorm(((p1 - p0) * sqrt(N) - za * s0) / s1)  '+c+fR(rW.power));
+    L.push('');
+    L.push('cat(sprintf("Wilson: reject if X >= %d, power = %.4f\\n", c_w, pw_w))');
+  }
+  L.push('');
+  L.push(c+'── Clopper-Pearson (exact binomial) method ────────────────────────────');
+  L.push(c+'Critical count: smallest c with P(X >= c | Bin(N, p0)) <= alpha');
+  L.push(c+'  => c = qbinom(1 - alpha, N, p0) + 1');
+  L.push('');
+  L.push('exact_power <- function(N, p0, p1, alpha) {');
+  L.push('  c_val <- qbinom(1 - alpha, N, p0) + 1    '+c+'critical count');
+  L.push('  1 - pbinom(c_val - 1, N, p1)              '+c+'P(X >= c | Bin(N, p1))');
+  L.push('}');
+  L.push('');
+  if(v.mode==='n'){
+    L.push('N_e <- 1L');
+    L.push('while (exact_power(N_e, p0, p1, alpha) < target) N_e <- N_e + 1L');
+    L.push(c+'N_e = '+rE.N);
+    L.push('');
+    L.push('c_e   <- qbinom(1 - alpha, N_e, p0) + 1    '+c+rE.crit);
+    L.push('pw_e  <- 1 - pbinom(c_e - 1, N_e, p1)      '+c+fR(rE.power));
+    L.push('ach_a <- 1 - pbinom(c_e - 1, N_e, p0)      '+c+fR(rE.alpha)+' (achieved α)');
+    L.push('');
+    L.push('cat(sprintf("CP:     N = %d, reject if X >= %d, achieved alpha = %.4f, power = %.4f\\n",');
+    L.push('            N_e, c_e, ach_a, pw_e))');
+  } else {
+    L.push('c_e   <- qbinom(1 - alpha, N, p0) + 1    '+c+rE.crit);
+    L.push('pw_e  <- 1 - pbinom(c_e - 1, N, p1)      '+c+fR(rE.power));
+    L.push('ach_a <- 1 - pbinom(c_e - 1, N, p0)      '+c+fR(rE.alpha)+' (achieved α)');
+    L.push('');
+    L.push('cat(sprintf("CP:     reject if X >= %d, achieved alpha = %.4f, power = %.4f\\n",');
+    L.push('            c_e, ach_a, pw_e))');
+  }
+  return L.join('\n');
+}
+
+function genPy(v,rW,rE){
+  var p0=v.p0,p1=v.p1,al=v.alpha;
+  var za=qnorm(1-al),s0=Math.sqrt(p0*(1-p0)),s1=Math.sqrt(p1*(1-p1));
+  var L=[];
+  var c='# ';
+  L.push('from math import sqrt, ceil');
+  L.push('from scipy.stats import norm, binom');
+  L.push('');
+  L.push(c+'── Parameters ─────────────────────────────────────────────────────────');
+  L.push('p0    = '+p0+'   '+c+'performance threshold (H₀: p ≤ p₀)');
+  L.push('p1    = '+p1+'   '+c+'expected proportion (H₁: p = p₁)');
+  L.push('alpha = '+al+'  '+c+'one-sided significance level');
+  if(v.mode==='n') L.push('target = '+v.target+'  '+c+'target power');
+  else             L.push('N = '+v.n+'      '+c+'fixed sample size');
+  L.push('');
+  L.push(c+'── Wilson score method ────────────────────────────────────────────────');
+  L.push('za = norm.ppf(1 - alpha)      '+c+fR(za));
+  L.push('s0 = sqrt(p0 * (1 - p0))     '+c+fR(s0,4)+' (null SE)');
+  L.push('s1 = sqrt(p1 * (1 - p1))     '+c+fR(s1,4)+' (alt SE)');
+  L.push('');
+  if(v.mode==='n'){
+    var zb=qnorm(v.target);
+    L.push('zb = norm.ppf(target)         '+c+fR(zb));
+    L.push('');
+    L.push('N_w  = ceil(((za * s0 + zb * s1) / (p1 - p0))**2)  '+c+rW.N);
+    L.push('c_w  = ceil(N_w * p0 + za * sqrt(N_w) * s0)         '+c+rW.crit);
+    L.push('pw_w = norm.cdf(((p1 - p0) * sqrt(N_w) - za * s0) / s1)  '+c+fR(rW.power));
+    L.push('');
+    L.push('print(f"Wilson: N = {N_w}, reject if X >= {c_w}, power = {pw_w:.4f}")');
+  } else {
+    L.push('c_w  = ceil(N * p0 + za * sqrt(N) * s0)             '+c+rW.crit);
+    L.push('pw_w = norm.cdf(((p1 - p0) * sqrt(N) - za * s0) / s1)  '+c+fR(rW.power));
+    L.push('');
+    L.push('print(f"Wilson: reject if X >= {c_w}, power = {pw_w:.4f}")');
+  }
+  L.push('');
+  L.push(c+'── Clopper-Pearson (exact binomial) method ────────────────────────────');
+  L.push(c+'Critical count: smallest c with P(X >= c | Bin(N, p0)) <= alpha');
+  L.push(c+'  scipy binom.ppf(q, n, p) returns smallest k with P(X <= k) >= q');
+  L.push('');
+  L.push('def exact_power(N, p0, p1, alpha):');
+  L.push('    c_val = int(binom.ppf(1 - alpha, N, p0)) + 1  '+c+'critical count');
+  L.push('    return 1 - binom.cdf(c_val - 1, N, p1)         '+c+'P(X >= c | Bin(N, p1))');
+  L.push('');
+  if(v.mode==='n'){
+    L.push('N_e = 1');
+    L.push('while exact_power(N_e, p0, p1, alpha) < target:');
+    L.push('    N_e += 1');
+    L.push(c+'N_e = '+rE.N);
+    L.push('');
+    L.push('c_e   = int(binom.ppf(1 - alpha, N_e, p0)) + 1    '+c+rE.crit);
+    L.push('pw_e  = 1 - binom.cdf(c_e - 1, N_e, p1)           '+c+fR(rE.power));
+    L.push('ach_a = 1 - binom.cdf(c_e - 1, N_e, p0)           '+c+fR(rE.alpha)+' (achieved α)');
+    L.push('');
+    L.push('print(f"CP:     N = {N_e}, reject if X >= {c_e}, achieved alpha = {ach_a:.4f}, power = {pw_e:.4f}")');
+  } else {
+    L.push('c_e   = int(binom.ppf(1 - alpha, N, p0)) + 1    '+c+rE.crit);
+    L.push('pw_e  = 1 - binom.cdf(c_e - 1, N, p1)           '+c+fR(rE.power));
+    L.push('ach_a = 1 - binom.cdf(c_e - 1, N, p0)           '+c+fR(rE.alpha)+' (achieved α)');
+    L.push('');
+    L.push('print(f"CP:     reject if X >= {c_e}, achieved alpha = {ach_a:.4f}, power = {pw_e:.4f}")');
+  }
+  return L.join('\n');
+}
+
+/* ── render ── */
+function readInputs(){
+  var mode=document.querySelector('#form input[name="mode"]:checked').value;
+  var v={mode:mode,p0:parseFloat($('p0').value),p1:parseFloat($('p1').value),
+    alpha:parseFloat($('alpha').value),target:parseFloat($('target').value),
+    n:parseInt($('n').value,10)};
+  var errs=[];
+  if(!(v.p0>0&&v.p0<1))errs.push('Threshold must be between 0 and 1.');
+  if(!(v.p1>0&&v.p1<=1))errs.push('Expected proportion must be between 0 and 1.');
+  if(v.p0>0&&v.p0<1&&v.p1>0&&v.p1<=1&&v.p1<=v.p0)errs.push('Expected proportion must exceed the threshold.');
+  if(!(v.alpha>0&&v.alpha<1))errs.push('Significance level must be between 0 and 1.');
+  if(mode==='n'&&!(v.target>0&&v.target<1))errs.push('Target power must be between 0 and 1.');
+  if(mode==='power'&&!(Number.isInteger(v.n)&&v.n>=1))errs.push('N must be a positive whole number.');
+  v.errors=errs;return v;
+}
+
+function syncMode(){
+  var mode=document.querySelector('#form input[name="mode"]:checked').value;
+  $('field-target').classList.toggle('is-hidden',mode!=='n');
+  $('field-n').classList.toggle('is-hidden',mode!=='power');
+}
+
+function render(){
+  var v=readInputs();
+  var panel=$('result-panel'),head=$('rp-head'),label=$('rp-label'),body=$('rp-body');
+
+  if(v.errors.length){
+    panel.classList.add('is-error');
+    label.textContent='Check inputs';
+    body.innerHTML=v.errors.map(function(e){return'<p class="result-error">'+esc(e)+'</p>';}).join('');
+    $('code-r').textContent='';$('code-py').textContent='';
+    return;
+  }
+  panel.classList.remove('is-error');
+
+  var rW,rE;
+  if(v.mode==='n'){
+    rW=wilsonSampleSize(v.p0,v.p1,v.alpha,v.target);
+    rE=cpSampleSize(v.p0,v.p1,v.alpha,v.target);
+    if(!rW||!rE){body.innerHTML='<p class="result-error">No solution found. Try increasing p₁ or decreasing the target.</p>';return;}
+    label.textContent='Sample size needed';
+  } else {
+    rW=wilsonAt(v.n,v.p0,v.p1,v.alpha);
+    rE=cpAt(v.n,v.p0,v.p1,v.alpha);
+    label.textContent='Power at N = '+fN(v.n);
+  }
+
+  // Rejection description
+  var decW,decE;
+  if(v.mode==='n'){
+    decW='Judge <b>'+fN(rW.N)+'</b> responses. Reject H₀ if at least <b>'+fN(rW.crit)+'</b> ('+fP(rW.crit/rW.N)+') are acceptable.';
+    decE='Judge <b>'+fN(rE.N)+'</b> responses. Reject H₀ if at least <b>'+fN(rE.crit)+'</b> ('+fP(rE.crit/rE.N)+') are acceptable.';
+  } else {
+    decW=rW.crit>rW.N?'Cannot reject H₀ at this N — increase N.':'Reject H₀ if at least <b>'+fN(rW.crit)+'</b> of '+fN(rW.N)+' ('+fP(rW.crit/rW.N)+') are acceptable.';
+    decE=rE.crit>rE.N?'Cannot reject H₀ at this N — increase N.':'Reject H₀ if at least <b>'+fN(rE.crit)+'</b> of '+fN(rE.N)+' ('+fP(rE.crit/rE.N)+') are acceptable.';
+  }
+
+  var html='<table class="cmp">';
+  html+='<thead><tr><th></th><th class="wilson">Wilson score</th><th class="cp">CP exact</th></tr></thead>';
+  html+='<tbody>';
+  if(v.mode==='n'){
+    html+='<tr><td>N</td><td class="w">'+fN(rW.N)+'</td><td class="c">'+fN(rE.N)+'</td></tr>';
+    html+='<tr><td>Reject if</td><td class="w">X ≥ '+fN(rW.crit)+'</td><td class="c">X ≥ '+fN(rE.crit)+'</td></tr>';
+    html+='<tr><td>Power at p₁</td><td class="w">'+fP(rW.power)+'</td><td class="c">'+fP(rE.power)+'</td></tr>';
+    html+='<tr><td>Type I error (α)</td><td>nominal '+esc(v.alpha)+'</td><td class="c">'+fV(rE.alpha,4)+' (achieved)</td></tr>';
+  } else {
+    html+='<tr><td>Power at p₁</td><td class="w">'+fP(rW.power)+'</td><td class="c">'+fP(rE.power)+'</td></tr>';
+    html+='<tr><td>Reject if</td><td class="w">X ≥ '+fN(rW.crit)+'</td><td class="c">X ≥ '+fN(rE.crit)+'</td></tr>';
+    html+='<tr><td>Type I error (α)</td><td>nominal '+esc(v.alpha)+'</td><td class="c">'+fV(rE.alpha,4)+' (achieved)</td></tr>';
+  }
+  html+='</tbody></table>';
+
+  // Arcsine note (only shown for the default region where the gap is meaningful)
+  if(v.p0>=0.80&&v.p1>=0.85&&v.p1-v.p0<=0.15&&v.mode==='n'){
+    var h=2*(Math.asin(Math.sqrt(v.p1))-Math.asin(Math.sqrt(v.p0)));
+    var za=qnorm(1-v.alpha),zb=qnorm(v.target);
+    var N_arc=Math.ceil(Math.pow((za+zb)/h,2));
+    var powArcW=wilsonAt(N_arc,v.p0,v.p1,v.alpha).power;
+    var powArcE=cpAt(N_arc,v.p0,v.p1,v.alpha).power;
+    html+='<div class="note"><b>Note on <code>pwr.p.test()</code> in R:</b> The arcsine (Cohen\'s h) formula gives N = '+N_arc+' for these parameters, but at N = '+N_arc+' the Wilson test has '+fP(powArcW)+' power and the CP test has '+fP(powArcE)+' power — below the '+fP(v.target)+' target. Use the values above. See the documentation below for explanation.</div>';
+  }
+
+  body.innerHTML=html;
+
+  // Code
+  $('code-r').textContent=genR(v,rW,rE);
+  $('code-py').textContent=genPy(v,rW,rE);
+}
+
+/* ── wiring ── */
+$('form').addEventListener('input',function(){syncMode();render();});
+$('form').addEventListener('change',function(){syncMode();render();});
+$('form').addEventListener('submit',function(e){e.preventDefault();});
+
+document.querySelectorAll('.lang-tab').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.lang-tab').forEach(function(b){b.classList.remove('is-active');b.setAttribute('aria-selected','false');});
+    document.querySelectorAll('.code-block').forEach(function(b){b.classList.add('is-hidden');});
+    btn.classList.add('is-active');btn.setAttribute('aria-selected','true');
+    $('code-'+btn.dataset.lang).classList.remove('is-hidden');
+  });
+});
+
+$('copy-btn').addEventListener('click',function(){
+  var active=document.querySelector('.code-block:not(.is-hidden)');
+  if(!active)return;
+  navigator.clipboard.writeText(active.textContent).then(function(){
+    var btn=$('copy-btn');
+    btn.textContent='Copied!';btn.classList.add('copied');
+    setTimeout(function(){btn.textContent='Copy';btn.classList.remove('copied');},1800);
+  });
+});
+
+syncMode();render();
+
+})();
+</script>
+</body>
+</html>

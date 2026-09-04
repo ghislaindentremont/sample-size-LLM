@@ -233,7 +233,7 @@ The following values are produced by the calculator at default settings: p₀ = 
 | Method | N (total) | n (questions) | k | VIF | Critical count c | Achieved α | Power |
 |---|---|---|---|---|---|---|---|
 | Exact binomial | 179 | — | — | — | 168 | 0.0473 | 0.8011 |
-| Score z-test | 184 | — | — | — | 175 | (nominal) | 0.8017 |
+| Score z-test | 184 | — | — | — | 173 | (nominal) | 0.8017 |
 | BB score test | 222 | 74 | 3 | 1.20 | — | — | 0.8041 |
 
 Additional spot checks (ρ = 0.10, k = 3):
