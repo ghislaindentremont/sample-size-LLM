@@ -2,19 +2,24 @@
 
 *Companion document to METHODS.md. Explains why the browser calculator's power
 and type I error predictions can differ by several percentage points from Monte
-Carlo results obtained by fitting a Beta-Binomial model with glmmTMB and testing
-on the logit scale (as in `v5_beta_binomial.R`).*
+Carlo results. For k ≥ 2 the simulation fits a Beta-Binomial model with glmmTMB
+and tests on the logit scale. For k = 1, glmmTMB cannot identify the
+overdispersion parameter (one observation per cluster), so the simulation falls
+back to a simple one-sample proportion test (OLS intercept) instead (as in
+`v5_beta_binomial.R`).*
 
 ---
 
 ## 1. Summary of the Four Structural Differences
 
-| Source | Calculator | Simulation (glmmTMB) |
-|---|---|---|
-| **Test statistic** | Score test on proportion scale | Wald test on logit(μ) scale |
-| **ρ (ICC)** | Specified by user, treated as known | Estimated jointly with μ from data |
-| **Power formula** | Analytic CLT approximation | Empirical rejection rate over 1 000 simulated datasets |
-| **What is being tested** | H₀: μ ≤ p₀ with user-fixed VIF | H₀: logit(μ) ≤ logit(p₀) with MLE-estimated overdispersion |
+| Source | Calculator | Simulation (k ≥ 2, glmmTMB) | Simulation (k = 1) |
+|---|---|---|---|
+| **Test statistic** | Score test on proportion scale | Wald test on logit(μ) scale | t-test on proportion (OLS intercept) |
+| **ρ (ICC)** | Specified by user, treated as known | Estimated jointly with μ from data | Not applicable (VIF = 1 always) |
+| **Power formula** | Analytic CLT approximation | Empirical rejection rate over 1 000 simulated datasets | Empirical rejection rate |
+| **What is being tested** | H₀: μ ≤ p₀ with user-fixed VIF | H₀: logit(μ) ≤ logit(p₀) with MLE-estimated overdispersion | H₀: μ ≤ p₀ via simple proportion test |
+
+**Note on the k = 1 column.** When k = 1 there is exactly one binary response per question, so glmmTMB cannot identify the overdispersion parameter (no within-cluster replication means the Hessian is rank-deficient or the optimisation converges to a boundary). The simulation therefore falls back to a simple one-sample proportion test — equivalent to OLS linear regression of the binary outcomes on an intercept — rather than glmmTMB. This means the k = 1 column is a clean comparison of the score test (calculator) against the Wald t-test on the proportion scale (simulation), with no confounding from ρ estimation or convergence failures.
 
 None of these differences makes one approach "wrong." They answer slightly
 different questions. The discrepancies that arise are predictable, directional,
@@ -42,20 +47,23 @@ increasingly non-linear.
 
 **Quantitative illustration (k=1, purely binomial, N=200).**
 
-With no clustering, there is no ρ estimation to worry about, and both approaches
-can be evaluated cleanly:
+With k=1 there is one binary response per question, so glmmTMB cannot estimate
+overdispersion and the simulation falls back to a simple one-sample proportion
+test (OLS regression of binary outcomes on an intercept, equivalent to a Wald
+t-test on p̂). There is therefore no ρ estimation to worry about, and the
+comparison is clean:
 
 | Quantity | Value |
 |---|---|
 | logit(0.95) − logit(0.90) | 2.944 − 2.197 = **0.747** |
 | SE of logit(p̂) under H₁ at N=200 | 1/√(200×0.95×0.05) = **0.324** |
-| Wald power (logit scale) | Φ(0.747/0.324 − 1.645) = Φ(0.66) ≈ **0.745** |
+| Wald power (logit / t-test scale) | Φ(0.747/0.324 − 1.645) = Φ(0.66) ≈ **0.745** |
 | Score test power (proportion scale) | Φ((0.05√200 − 1.645×0.3)/0.218) ≈ **0.837** |
-| Simulated glmmTMB power | ≈ **0.77** |
+| Simulated power (simple proportion test) | ≈ **0.77** |
 
 The calculator predicts 0.837; the simulation lands near 0.77; the logit Wald
-formula gives 0.745. The gap between the calculator and glmmTMB at k=1 is almost
-entirely the test-scale effect — no ρ estimation involved.
+formula gives 0.745. The gap at k=1 is entirely the test-scale effect — the
+simulation does not use glmmTMB here, so convergence and ρ estimation play no role.
 
 **Direction:** Because the score test on the proportion scale uses the null SE
 (√(p₀q₀/N)) as denominator while the Wald test on the logit scale uses the
@@ -248,8 +256,13 @@ scenarios.
 
 When using the calculator for planning:
 
-1. **At k=1**, the only discrepancy is test-scale (score vs. Wald-logit); expect
-   realized power ~5–10 pp lower in a glmmTMB analysis.
+1. **At k=1**, glmmTMB cannot be used (overdispersion is unidentifiable with one
+   observation per cluster). The simulation uses a simple one-sample proportion
+   test instead. The only discrepancy vs. the calculator is therefore the
+   test-scale difference (score on proportion scale vs. Wald t-test on proportion
+   scale); expect realized power ~5–10 pp lower than the calculator's prediction.
+   For your own k=1 analysis, use an exact binomial test or Wilson score test —
+   not glmmTMB.
 
 2. **At k≥3 with ρ > 0.1**, the VIF correction dominates, and the calculator's
    type I error formula for the naive test is accurate. The BB score test power
