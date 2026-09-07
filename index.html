@@ -178,6 +178,11 @@ dl.assume dd .why { color: var(--muted); }
 .callout b { font-weight: 600; }
 .callout.warn { background: var(--danger-tint); border-color: var(--danger); }
 footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.86rem; max-width: 66ch; }
+ol.refs { margin: 0; padding-left: 1.6em; display: grid; gap: 8px; font-size: 0.9rem; color: var(--muted); }
+ol.refs li { line-height: 1.5; }
+ol.refs a { color: inherit; text-underline-offset: 2px; }
+ol.refs .ref-cite { font-family: var(--mono); font-size: 0.82em; color: var(--accent-ink); font-weight: 500; }
+sup a { color: var(--accent-ink); font-size: 0.75em; text-decoration: none; }
 
 @media (prefers-reduced-motion: no-preference) { .mode label { transition: background-color 120ms ease, color 120ms ease; } }
 </style>
@@ -390,26 +395,26 @@ crit  = ⌈ N·p₀ + z_α·√(N·p₀q₀) ⌉</pre>
   <section>
     <h2>The Beta-Binomial model</h2>
     <p>In many LLM evaluation studies, questions differ in inherent difficulty — some prompts are much harder than others. When the LLM gives <span class="m">k</span> responses per question, the responses to the same question are correlated: they share the same underlying difficulty <span class="m">p<sub>i</sub></span>. The standard binomial model ignores this correlation and treats all <span class="m">n·k</span> responses as independent. The Beta-Binomial model accounts for it.</p>
-    <p>The model assumes each question <span class="m">i</span> has its own acceptable-response probability <span class="m">p<sub>i</sub></span>, and that these per-question probabilities follow a Beta distribution:</p>
+    <p>The model assumes each question <span class="m">i</span> has its own acceptable-response probability <span class="m">p<sub>i</sub></span>, and that these per-question probabilities follow a Beta distribution:<sup><a href="#bb-ref5">[5]</a><a href="#bb-ref6">[6]</a></sup></p>
     <p class="hyp">p<sub>i</sub> ~ Beta(α<sub>β</sub>, β<sub>β</sub>) &nbsp;&nbsp; X<sub>i</sub> | p<sub>i</sub> ~ Binomial(k, p<sub>i</sub>)</p>
-    <p>The marginal mean is <span class="m">μ = α<sub>β</sub>/(α<sub>β</sub>+β<sub>β</sub>)</span> and the Beta <em>concentration</em> is <span class="m">φ = α<sub>β</sub>+β<sub>β</sub></span>. Higher φ means the p<sub>i</sub> are tightly clustered near μ (less question-to-question variability). The <em>intra-class correlation</em> ICC = ρ = 1/(1+φ) is the proportion of total variance in individual responses that comes from question-level differences. When ρ = 0, all questions are equally hard and the model reduces exactly to the standard binomial.</p>
+    <p>The marginal mean is <span class="m">μ = α<sub>β</sub>/(α<sub>β</sub>+β<sub>β</sub>)</span> and the Beta <em>concentration</em> is <span class="m">φ = α<sub>β</sub>+β<sub>β</sub></span>. Higher φ means the p<sub>i</sub> are tightly clustered near μ (less question-to-question variability). The <em>intra-class correlation</em> ICC = ρ = 1/(1+φ) is the proportion of total variance in individual responses that comes from question-level differences.<sup><a href="#bb-ref6">[6]</a></sup> When ρ = 0, all questions are equally hard and the model reduces exactly to the standard binomial.</p>
   </section>
   <section>
     <h2>The design effect and variance inflation</h2>
-    <p>The key quantity is the <em>variance inflation factor</em> (also called the design effect):</p>
+    <p>The key quantity is the <em>variance inflation factor</em> (VIF, also called the design effect<sup><a href="#bb-ref1">[1]</a></sup>):</p>
     <pre class="formula">VIF = 1 + (k − 1) · ρ</pre>
-    <p>The total observed proportion <span class="m">p̂ = X/(n·k)</span> has variance <span class="m">μ(1−μ)·VIF / (n·k)</span>, compared to <span class="m">μ(1−μ)/(n·k)</span> for iid responses. The clustering inflates the variance by VIF. Equivalently, the <em>effective sample size</em> is <span class="m">n·k/VIF</span> — fewer independent pieces of information than the raw count suggests.</p>
+    <p>The total observed proportion <span class="m">p̂ = X/(n·k)</span> has variance <span class="m">μ(1−μ)·VIF / (n·k)</span>, compared to <span class="m">μ(1−μ)/(n·k)</span> for iid responses. The clustering inflates the variance by VIF. Equivalently, the <em>effective sample size</em> is <span class="m">n·k/VIF</span> — fewer independent pieces of information than the raw count suggests. The VIF formula for clustered binary outcomes was applied to sample size planning by Donner, Birkett &amp; Buck (1981)<sup><a href="#bb-ref2">[2]</a></sup> and is the standard formulation in cluster-randomized trial design.<sup><a href="#bb-ref3">[3]</a></sup></p>
     <p>When k = 1, VIF = 1 regardless of ρ: a single response per question means there is no within-question replication and no inflation. VIF grows with both k and ρ. For k = 5 and ρ = 0.15, VIF = 1.6, meaning you need 60% more total responses than the standard formula says.</p>
     <div class="callout warn"><b>Ignoring clustering inflates your Type I error.</b> If you use the standard binomial test on Beta-Binomial data, the true significance level is 1 − Φ(z<sub>α</sub>/√VIF), not α. For k = 3 and ρ = 0.10 (VIF = 1.2), a nominal 5% test actually rejects at 6.7%. Your power estimate is also overstated — true power is lower than the formula predicts.</div>
   </section>
   <section>
-    <h2>The score test for the Beta-Binomial model</h2>
-    <p>The test is H₀: μ ≤ p₀ vs H₁: μ > p₀, where μ = E[p<sub>i</sub>]. The score test statistic uses the VIF-adjusted standard error under H₀. The power formula and sample size are identical to the score test on Tab 1, with the total N replaced by the effective sample size N/VIF:</p>
+    <h2>The planning calculation: VIF-corrected score test</h2>
+    <p>The calculator uses a VIF-corrected score test for planning, with H₀: μ ≤ p₀ vs H₁: μ > p₀, where μ = E[p<sub>i</sub>] is the population mean acceptable rate. The score statistic uses the null SE inflated by √VIF; power and sample size follow directly<sup><a href="#bb-ref2">[2]</a><a href="#bb-ref3">[3]</a><a href="#bb-ref4">[4]</a></sup>:</p>
     <pre class="formula">n = ⌈ VIF · (z_α·√(p₀q₀) + z_β·√(μ₁q₁))² / (δ² · k) ⌉  (questions)
 N = n · k                                                   (total responses)
 
 power = Φ( ( (μ₁ − p₀)·√(n·k/VIF) − z_α·√(p₀q₀) ) / √(μ₁q₁) )</pre>
-    <p>The critical count of total successes X is <span class="m">c = ⌈n·k·p₀ + z_α·√(n·k·p₀q₀·VIF)⌉</span>. All computations are analytic (CLT-based) — there is no exact closed-form BB distribution for arbitrary n, so no exact test is offered here. The CLT approximation is reliable when n is at least 30 questions and n·p₀ and n·(1−p₀) are both at least 5.</p>
+    <p>The critical count of total successes X is <span class="m">c = ⌈n·k·p₀ + z_α·√(n·k·p₀q₀·VIF)⌉</span>. <b>These formulas treat ρ as a known planning constant.</b> All computations are analytic (CLT-based); the approximation is reliable when n ≥ 30 questions and n·p₀ and n·(1−p₀) are both ≥ 5. Because ρ is fixed at the user-supplied value, this is an upper bound on the power achievable with a data-adaptive analysis that must estimate ρ from the same data.</p>
   </section>
   <section>
     <h2>Assumptions</h2>
@@ -421,6 +426,87 @@ power = Φ( ( (μ₁ − p₀)·√(n·k/VIF) − z_α·√(p₀q₀) ) / √(μ
       <div><dt>N = n·k is fixed before data collection.</dt><dd>Same as the one-proportion test: sequential stopping inflates the true α.</dd></div>
       <div><dt>Judgments are accurate and the rubric is fixed.</dt><dd>Same as the one-proportion test: observer bias shifts the observed proportion.</dd></div>
     </dl>
+  </section>
+
+  <section>
+    <h2>Running the analysis on collected data</h2>
+    <p>The calculator is a <em>planning</em> tool — it computes power assuming ρ is known in advance. When you have collected your data, a different procedure is needed: the Beta-Binomial model must be fit to estimate both μ and ρ jointly from the data, and the hypothesis H₀: μ ≤ p₀ is tested from that fitted model.</p>
+    <p><b>What is being tested.</b> The estimand is μ, the population mean acceptable-response rate averaged over the Beta distribution of per-question difficulties. The test H₀: μ ≤ p₀ is equivalent to H₀: logit(μ) ≤ logit(p₀) (logit is monotone), and the recommended procedure tests on the logit scale where the Beta-Binomial likelihood is most well-behaved.</p>
+    <p><b>Recommended analysis: Beta-Binomial GLMM via <code>glmmTMB</code> (R).</b> This fits the full Beta-Binomial likelihood by MLE, simultaneously estimating μ and the overdispersion (ρ), and performs a Wald test of the intercept (logit(μ)) against logit(p₀). It does not assume ρ is known.</p>
+    <pre class="formula">library(glmmTMB)
+
+# Parameters
+p0 &lt;- 0.90   # performance threshold
+k  &lt;- 3      # responses per question (replace with your k)
+
+# Data: one row per question, y = acceptable responses out of k
+# df &lt;- read.csv("your_data.csv")
+# Example: df &lt;- data.frame(y = c(2, 3, 3, 1, 3, ...), k = k)
+
+# Fit Beta-Binomial model
+m &lt;- glmmTMB(
+  cbind(y, k - y) ~ 1,
+  family = betabinomial(link = "logit"),
+  data = df
+)
+stopifnot(isTRUE(m$sdr$pdHess))     # require positive-definite Hessian
+
+# Estimates
+logit_mu &lt;- fixef(m)$cond["(Intercept)"]      # logit-scale mean
+se       &lt;- sqrt(vcov(m)$cond[1, 1])          # SE of logit(μ̂)
+mu_hat   &lt;- plogis(logit_mu)                   # back-transform to [0, 1]
+phi_hat  &lt;- sigma(m)                           # Beta concentration φ̂
+rho_hat  &lt;- 1 / (1 + phi_hat)                 # ICC  ρ̂ = 1/(1 + φ̂)
+VIF_hat  &lt;- 1 + (k - 1) * rho_hat             # estimated VIF
+
+# One-sided Wald test: H₀: logit(μ) ≤ logit(p₀)
+logit_p0 &lt;- log(p0 / (1 - p0))
+z_stat   &lt;- (logit_mu - logit_p0) / se
+p_value  &lt;- pnorm(z_stat, lower.tail = FALSE)  # upper-tail p-value
+
+cat(sprintf(
+  "mu_hat = %.4f   rho_hat = %.4f   VIF = %.3f\nz = %.3f   one-sided p = %.4f\n",
+  mu_hat, rho_hat, VIF_hat, z_stat, p_value
+))</pre>
+    <p><b>Python: VIF-corrected score test (uses planning-stage ρ).</b> Python has no standard Beta-Binomial GLMM package. A practical alternative is the VIF-corrected score test applied to the collected data, treating the planning-stage ρ as approximately known. This matches the test the calculator's power formula was designed for.</p>
+    <pre class="formula">import numpy as np
+from scipy.stats import norm
+
+# Parameters
+p0  = 0.90   # performance threshold
+k   = 3      # responses per question
+rho = 0.10   # ICC — use your planning-stage value (or estimate from R)
+
+# Data: y = array of acceptable-response counts per question
+y   = np.array([...])   # replace with your data
+n_q = len(y)            # number of questions
+N   = n_q * k           # total responses
+
+# VIF-corrected score test: H₀: μ ≤ p₀
+mu_hat = y.sum() / N
+VIF    = 1 + (k - 1) * rho
+z_stat = (mu_hat - p0) / np.sqrt(p0 * (1 - p0) * VIF / N)
+p_val  = norm.sf(z_stat)   # one-sided upper-tail p-value
+
+print(f"mu_hat = {mu_hat:.4f}   VIF = {VIF:.3f}")
+print(f"z = {z_stat:.3f}   one-sided p = {p_val:.4f}")
+
+# Note: for a fully data-adaptive analysis that estimates rho from the
+# data, use glmmTMB in R (above). The test above uses the planning-stage
+# rho as a fixed constant.</pre>
+    <div class="callout"><b>Planning vs. analysis gap.</b> The glmmTMB Wald test on the logit scale and the VIF-corrected score test on the proportion scale are asymptotically equivalent but differ in finite samples — especially near p₀ = 0.90 where the logit transformation is strongly non-linear. For p₀ = 0.90 and N ≈ 200, expect realized power from glmmTMB to be roughly 5–10 percentage points below the calculator's prediction. See <a href="ANALYTIC_VS_SIMULATION.md">ANALYTIC_VS_SIMULATION.md</a> for a detailed decomposition. Set your target power at least 5–10 pp above the minimum acceptable level to absorb this gap.</div>
+  </section>
+
+  <section>
+    <h2>References</h2>
+    <ol class="refs">
+      <li id="bb-ref1"><span class="ref-cite">Kish 1965</span> — Kish, L. (1965). <i>Survey Sampling</i>. John Wiley &amp; Sons, New York. (Source of the design effect concept that VIF generalises.)</li>
+      <li id="bb-ref2"><span class="ref-cite">Donner, Birkett &amp; Buck 1981</span> — Donner, A., Birkett, N., &amp; Buck, C. (1981). Randomization by cluster: sample size requirements and analysis. <i>American Journal of Epidemiology</i>, 114(6), 906–914. <a href="https://doi.org/10.1093/oxfordjournals.aje.a113261" target="_blank" rel="noopener">doi:10.1093/oxfordjournals.aje.a113261</a></li>
+      <li id="bb-ref3"><span class="ref-cite">Donner &amp; Klar 2000</span> — Donner, A., &amp; Klar, N. (2000). <i>Design and Analysis of Cluster Randomization Trials in Health Research</i>. Arnold, London. ISBN 0-340-69153-0.</li>
+      <li id="bb-ref4"><span class="ref-cite">Fleiss, Levin &amp; Paik 2003</span> — Fleiss, J. L., Levin, B., &amp; Paik, M. C. (2003). <i>Statistical Methods for Rates and Proportions</i> (3rd ed.). Wiley. <a href="https://doi.org/10.1002/0471445428" target="_blank" rel="noopener">doi:10.1002/0471445428</a></li>
+      <li id="bb-ref5"><span class="ref-cite">Williams 1982</span> — Williams, D. A. (1982). Extra-binomial variation in logistic linear models. <i>Journal of the Royal Statistical Society: Series C (Applied Statistics)</i>, 31(2), 144–148. <a href="https://doi.org/10.2307/2347977" target="_blank" rel="noopener">doi:10.2307/2347977</a></li>
+      <li id="bb-ref6"><span class="ref-cite">Ridout, Demétrio &amp; Firth 1999</span> — Ridout, M. S., Demétrio, C. G. B., &amp; Firth, D. (1999). Estimating intraclass correlation for binary data. <i>Biometrics</i>, 55(1), 137–148. <a href="https://doi.org/10.1111/j.0006-341X.1999.00137.x" target="_blank" rel="noopener">doi:10.1111/j.0006-341X.1999.00137.x</a></li>
+    </ol>
   </section>
 </div>
 
