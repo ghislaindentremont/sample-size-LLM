@@ -205,6 +205,17 @@ sup a{color:var(--accent-ink);font-size:0.75em;text-decoration:none;}
 </section>
 
 <section>
+  <h2>Score test vs. Wald test — and what the power formula actually approximates</h2>
+  <p>The Wilson score test and the Wald test both produce a z-statistic, but they are different tests. The difference is where the standard error is evaluated:</p>
+  <p><b>Wald test:</b> SE = √(p̂(1−p̂)/N), evaluated at the <em>observed</em> proportion p̂. When p̂ is near 0 or 1, this SE collapses and confidence limits fall outside [0, 1]. This is the method to avoid at the extremes.</p>
+  <p><b>Score test (Wilson):</b> SE = √(p₀(1−p₀)/N), evaluated at the <em>null value</em> p₀ — a known constant. The rejection rule is: reject H₀ if the observed count X ≥ c, where</p>
+  <pre class="formula">c = ⌈ N·p₀ + z_α · √( N · p₀ · (1−p₀) ) ⌉</pre>
+  <p>Applying this rule to your data involves no approximation — c is a fixed integer computed from p₀ and N before you collect any observations. Constructing a one-sided Wilson confidence interval and checking whether it excludes p₀ is exactly equivalent.</p>
+  <p><b>The power formula is a CLT approximation of the score test's true power.</b> The score test's true power is P(X ≥ c | Binomial(N, p₁)) — the same kind of exact binomial tail sum that CP uses. For the Wilson method, this sum is approximated by treating p̂ = X/N as normally distributed under H₁ (p̂ ≈ N(p₁, p₁q₁/N)), which yields the closed-form formula above. This approximation is what enables a one-line sample size formula; its error is typically 1–3 pp for the N values relevant to LLM evaluation.</p>
+  <div class="callout"><b>In short:</b> The power formula approximates the power of the score test — not the Wald test. The score and Wald tests have different rejection rules (null SE vs. observed SE). When you collect data, apply the score rejection rule X ≥ c. If you want exact power at the planning stage rather than an approximation, use the CP method.</div>
+</section>
+
+<section>
   <h2>Why <code>pwr.p.test()</code> gives a different answer</h2>
   <p>The <code>pwr</code> package in R uses Cohen's h, an arcsine-transformation effect size:</p>
   <pre class="formula">h = 2 · arcsin(√p₁) − 2 · arcsin(√p₀)</pre>
