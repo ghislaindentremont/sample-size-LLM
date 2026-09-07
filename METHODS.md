@@ -78,7 +78,7 @@ computed by the same log-space tail sum but with p₁ in place of p₀.
 
 ### 3.2 Score (Wilson) Z-Test
 
-The score test evaluates the standard error at the null parameter value p₀ rather than at the sample proportion p̂. This is equivalent (in the one-sided case) to asking whether the lower bound of the one-sided Wilson confidence interval exceeds p₀.
+The score test evaluates the standard error at the null parameter value p₀ rather than at the sample proportion p̂. This is equivalent (in the one-sided case) to asking whether the lower bound of the one-sided Wilson confidence interval exceeds p₀. The interval itself was introduced by Wilson (1927) [1]; the power and sample size formulas below are the standard analytic results derived from that score statistic — see Fleiss, Levin & Paik (2003) [4] §4.2 and Lachin (1981) [5] for derivations in the clinical-trial context.
 
 **Closed-form sample size.** The standard score-test formula is
 
@@ -256,6 +256,38 @@ A methods section reporting results from this calculator should specify all of t
 8. **Software**: "browser-based LLM Evaluation Power Calculator (open-source, available at [URL])"
 
 Example reporting sentence: "Sample size was determined using an exact binomial one-sided test (p₀ = 0.90, p₁ = 0.95, α = 0.05, power = 0.80), yielding N = 179 responses with critical count c = 168, achieved α = 0.047, and achieved power = 0.801."
+
+---
+
+## 9. Method Choice: Wilson Score vs. Clopper-Pearson
+
+The two methods answer the same question but make different trade-offs.
+
+**Clopper-Pearson (exact binomial).** The type I error is guaranteed to be at or below the nominal α for every N and p₀. This is the sense in which the method is "exact." The cost is conservatism: because the binomial is discrete, the achieved α is often strictly below the nominal (e.g., 4.86% instead of 5%), which reduces power slightly. For regulatory or clinical submissions where a strict upper bound on α is required, CP is the standard choice.
+
+**Wilson score.** The score test evaluates the variance at the null (p₀q₀/N) rather than at the observed proportion (p̂q̂/N). This makes it better calibrated than the Wald test across the full range of p, including near 0 and 1 — a regime relevant to LLM evaluation. Three key evaluations support Wilson as the default for general planning:
+
+- **Wilson (1927) [1]** introduced the score interval and showed it has better finite-sample behaviour than the normal approximation with observed-proportion variance (Wald).
+- **Agresti & Coull (1998) [2]** demonstrated that the Wilson interval (and its "add-2" variant) outperforms the "exact" CP interval in terms of average coverage, arguing that CP's over-coverage is itself a defect rather than a virtue when the goal is to attain the nominal level. Their title — "Approximate is better than 'exact'" — summarises the finding.
+- **Brown, Cai & DasGupta (2001) [3]** provided a comprehensive coverage-probability analysis showing that the Wald interval fails badly near p = 0 and p = 1 (the regime of this calculator), while Wilson and Jeffreys intervals maintain near-nominal coverage throughout. The CP interval works well but systematically over-covers.
+
+**Practical summary.** For p₀ near 0.90 (the default for LLM evaluation) and N in the range 100–400, the power difference between Wilson and CP is small (typically 1–3 pp). The CP method guarantees α control; the Wilson method has better average coverage and a closed-form sample size formula. Either can be reported; state which you used and cite accordingly.
+
+**What not to use: the arcsine (Cohen's h) approximation.** The `pwr.p.test()` function in R uses the arcsine-transformation effect size h = 2 arcsin(√p₁) − 2 arcsin(√p₀), which is a variance-stabilising transform designed for proportions near 0.5. For p₀ = 0.90, p₁ = 0.95, it gives N = 167, but at N = 167 the Wilson test achieves only 75.8% power (below the 80% target). The correct sample sizes are N = 184 (Wilson) and N = 179 (CP exact). Use the arcsine approximation only when p is near 0.5.
+
+---
+
+## 10. References
+
+[1] Wilson, E. B. (1927). Probable inference, the law of succession, and statistical inference. *Journal of the American Statistical Association*, 22(158), 209–212. https://doi.org/10.1080/01621459.1927.10502953
+
+[2] Agresti, A., & Coull, B. A. (1998). Approximate is better than "exact" for interval estimation of binomial proportions. *The American Statistician*, 52(2), 119–126. https://doi.org/10.1080/00031305.1998.10480550
+
+[3] Brown, L. D., Cai, T. T., & DasGupta, A. (2001). Interval estimation for a binomial proportion. *Statistical Science*, 16(2), 101–133. https://doi.org/10.1214/ss/1009213286
+
+[4] Fleiss, J. L., Levin, B., & Paik, M. C. (2003). *Statistical Methods for Rates and Proportions* (3rd ed.). John Wiley & Sons. https://doi.org/10.1002/0471445428
+
+[5] Lachin, J. M. (1981). Introduction to sample size determination and power analysis for clinical trials. *Controlled Clinical Trials*, 2(2), 93–113. https://doi.org/10.1016/0197-2456(81)90001-5
 
 ---
 
