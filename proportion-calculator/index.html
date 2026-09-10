@@ -363,7 +363,7 @@ reject H₀ if  X ≥ ⌈ N·p₀ + z_α·√(N·p₀q₀·VIF) ⌉</pre>
     <div><dt>Responses to a prompt are independent given the prompt.</dt><dd><span class="why">Shared conversation history, caching, or near-zero temperature make responses more alike than ρ allows and understate the true VIF.</span></dd></div>
     <div><dt>ρ is a planning constant.</dt><dd><span class="why">The analysis of collected data should estimate it (Beta-Binomial regression); realised power is then a little below the planned value. Set the target power a few points above the minimum you need.</span></dd></div>
     <div><dt>N is large enough for the normal approximation.</dt><dd><span class="why">Require N·(1 − p₀)/VIF ≥ 10 — for p₀ = 0.90, at least 100 effective responses (N/VIF). Below roughly 60 effective responses, model-based analyses of the collected data (a Beta-Binomial fit with a Wald test) become markedly conservative and often fail to converge; plan above that floor.</span></dd></div>
-    <div><dt>All one-proportion assumptions still apply.</dt><dd><span class="why">Fixed rubric, prompts sampled from the target distribution, N fixed in advance, accurate judges.</span></dd></div>
+    <div><dt>The other one-proportion assumptions still apply — except independence of responses.</dt><dd>Fixed rubric, prompts sampled from the target distribution, N fixed in advance, accurate judges. <span class="why">The one-proportion tab requires every response to be independent; this tab replaces that requirement with the weaker one above — responses need only be independent <em>given their prompt</em>, with the dependence between responses to the same prompt captured by ρ and absorbed into VIF.</span></dd></div>
   </dl>
 </section>
 
