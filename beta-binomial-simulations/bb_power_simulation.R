@@ -15,27 +15,34 @@
 #
 # PART 2 — Type I error (same grid, null distribution mu = 0.90):
 #   Which test controls alpha when data are clustered?
-#   Result: glmmTMB holds type I error near alpha. Naive binomial inflates it
-#   whenever rho > 0 (treats N*k correlated outcomes as independent).
+#   Result: glmmTMB holds type I error near alpha. The naive Wilson score
+#   test inflates it when rho > 0 and k > 1 (treats N*k correlated outcomes
+#   as independent); at k = 1 it is exactly valid for any rho.
 #
 # PART 3 — Unequal entity cost (B = N*(c_N + k)):
 #   If recruiting a new entity (question) costs c_N times a single response,
 #   does k > 1 ever maximise power?
-#   Analytic result: N_eff = N/VIF = B / [(c_N+k)(1+(k-1)*rho)]. The
-#   denominator is strictly increasing in k for k >= 1, rho >= 0, c_N >= 0,
-#   so k = 1 remains optimal. The simulation confirms this and quantifies the
-#   practical power penalty of k = 2-3, which matters when the analyst needs
-#   k >= 2 to fit a BB model (glmmTMB is unidentifiable at k = 1).
+#   Analytic result: the effective number of independent binary outcomes is
+#     N_eff = N*k / VIF = B*k / [(c_N+k)(1+(k-1)*rho)],
+#   maximised at  k* = sqrt(c_N*(1-rho)/rho)  (classical optimal cluster
+#   size). k = 1 is optimal only when c_N = 0 or rho is large; for low-rho
+#   entities (J-shape, Unimodal) or expensive entities (c_N = 20) the optimum
+#   moves to k = 5-20. The simulation confirms this.
 #
 # ── Tests compared ─────────────────────────────────────────────────────────────
 #
-# glmmTMB   Beta-Binomial MLE; Wald test on logit(mu) scale.
-#           k = 1 fallback: overdispersion is unidentifiable with one binary
-#           outcome per entity (Hessian rank-deficient in dispersion direction).
-#           Falls back to logistic GLM intercept = Wald proportion test.
+# glmmTMB   Beta-Binomial MLE (k >= 2); one-sided Wald test on logit(mu).
+#           k = 1: the Beta-Binomial reduces exactly to the Binomial (rho is
+#           unidentifiable from one binary draw per entity), so the Wilson
+#           score test below is used. (A Wald logistic-GLM test at k = 1 has
+#           zero power for N < ~60 because p_hat = 1 gives a degenerate logit;
+#           this produced power = 0 in the c_N = 20 cells of Part 3.)
 #
-# naive     Exact binomial test on all N*k pooled outcomes (binom.test).
-#           Valid only when rho = 0. Shown in Parts 1-2 only.
+# naive     Wilson score test on all M = N*k pooled outcomes — the test
+#           recommended in the manuscript and the calculator:
+#             prop.test(X, M, p = p0, alternative = "greater", correct = FALSE)
+#           (equivalently X >= ceiling(M*p0 + z_alpha*sqrt(M*p0*(1-p0)))).
+#           Valid only when rho = 0 or k = 1. Shown in Parts 1-2 only.
 #
 # ── glmmTMB convergence failures ──────────────────────────────────────────────
 #
@@ -49,10 +56,22 @@
 #   - rho near 0 (J-shape, Unimodal): phi -> infinity at boundary; flat region
 #   - rho near 1 (Strong-U): phi -> 0 at boundary; Hessian ill-conditioned
 #
-# Effect: dropped fits are excluded from the power mean. If convergence
-# correlates with extreme estimates, retained power is biased upward.
-# Cells with fail_glmmTMB > 0.10 are flagged and should be treated as
-# unreliable. The direction of bias is toward overstatement of power.
+# Effect: dropped fits are excluded from the power mean. Near rho = 0 the
+# dropped datasets are the ones showing NO overdispersion (phi -> infinity),
+# i.e. those with the smallest SE and highest power, so retained power is
+# biased DOWNWARD. In addition, the Wald test on the logit scale is markedly
+# conservative when the effective sample size N_eff = N*k/VIF is small
+# (< ~60) and p_hat is near 1 (Hauck-Donner effect). Together these produce
+# the dip at k = 3 for c_N = 20 in Part 3 (analytic power there is monotone
+# in k). Cells with fail_glmmTMB > 0.10 or N_eff < 60 are flagged in the
+# convergence summary (`unreliable`) and should not be over-interpreted.
+#
+# ── Outputs (written to out_dir) ──────────────────────────────────────────────
+#
+#   results_part1.csv / results_part2.csv / results_part3.csv   full grids
+#   power_equal_costs.png, type1_equal_costs.png, power_unequal_costs.png
+#   convergence_failures.csv   fail_glmmTMB for every cell of all three parts
+#   convergence_failures.png   heatmaps of fail_glmmTMB (scenario x k, by design)
 #
 # Dependencies: glmmTMB, ggplot2
 # Runtime: ~1-3 hours for n_sims = 1000. Set n_sims = 200 for a quick check.
@@ -68,6 +87,12 @@ set.seed(88)
 threshold   <- 0.90
 alpha_level <- 0.05
 n_sims      <- 1000   # replications per simulation cell
+
+# Output directory: works whether the working directory is the repo root or
+# the beta-binomial-simulations folder itself.
+out_dir <- if (dir.exists("beta-binomial-simulations")) "beta-binomial-simulations" else "."
+save_fig <- function(name, plot, width, height)
+  ggsave(file.path(out_dir, name), plot, width = width, height = height, dpi = 150)
 
 
 # ── Beta scenarios ─────────────────────────────────────────────────────────────
@@ -130,73 +155,21 @@ print(plot_densities(betas_h1, "H1 distributions: mean = 0.95"))
 print(plot_densities(betas_h0, "H0 null boundary: mean = 0.90"))
 
 
-# ── Startup diagnostic ─────────────────────────────────────────────────────────
-# Fits one Beta-Binomial model and prints the convergence fields so you can
-# verify the glmmTMB version in use and confirm the fit is being accepted.
-# If pdHess = FALSE or sdr is absent, the convergence check prints a note.
-local({
-  cat("── Startup diagnostic: one Beta-Binomial fit ────────────────────────────\n")
-  cat("   glmmTMB version:", as.character(packageVersion("glmmTMB")), "\n")
-  d <- data.frame(succ = c(5L,6L,5L,4L,6L,7L,5L,4L,6L,5L),
-                  fail = c(1L,0L,1L,2L,0L,1L,1L,2L,0L,1L))
-  m <- tryCatch(
-    suppressWarnings(glmmTMB(cbind(succ, fail) ~ 1,
-                             family = betabinomial(link = "logit"), data = d)),
-    error = function(e) { cat("   ERROR:", conditionMessage(e), "\n"); NULL }
-  )
-  if (!is.null(m)) {
-    pdHess <- tryCatch(m$sdr$pdHess, error = function(e) NA)
-    se     <- tryCatch(sqrt(vcov(m)$cond[1L, 1L]), error = function(e) NA_real_)
-    cat(sprintf("   fit$convergence = %s  |  sdr$pdHess = %s  |  SE = %.4f\n",
-                m$fit$convergence, pdHess, se))
-    if (isTRUE(m$fit$convergence == 0L) && is.finite(se))
-      cat("   Fit accepted — convergence check working correctly.\n")
-    else
-      cat("   WARNING: fit would be dropped by current convergence check.\n")
-  }
-  cat("\n")
-})
-
 # ── Core simulation functions ──────────────────────────────────────────────────
 
-# Fit Beta-Binomial (k >= 2) or logistic GLM (k = 1 fallback).
+# Fit Beta-Binomial (k >= 2 only; at k = 1 sim_once uses the exact test).
 # Returns c(logit_mu_hat, SE) or c(NA, NA) on convergence failure.
-#
-# Convergence criteria (in order):
-#   1. No try-error from glmmTMB itself.
-#   2. Optimizer converged: m$fit$convergence == 0.
-#   3. Hessian positive-definite (pdHess): checked only when m$sdr is non-NULL.
-#      In some glmmTMB versions sdr may be absent; we do not reject on absence.
-#   4. SE is finite and positive.
 fit_bb <- function(successes, k) {
   d <- data.frame(succ = successes, fail = k - successes)
 
-  if (k == 1L) {
-    m <- try(glm(cbind(succ, fail) ~ 1, family = binomial, data = d), silent = TRUE)
-    if (inherits(m, "try-error")) return(c(NA_real_, NA_real_))
-    se <- tryCatch(sqrt(vcov(m)[1L, 1L]), error = function(e) NA_real_)
-    if (!is.finite(se) || se <= 0) return(c(NA_real_, NA_real_))
-    return(c(coef(m)[[1L]], se))
-  }
-
-  # Use betabinomial() without namespace prefix; glmmTMB::betabinomial() is
-  # equivalent after library(glmmTMB) but the prefix occasionally causes issues
-  # with NSE in some glmmTMB versions.
   m <- try(suppressWarnings(
-    glmmTMB(cbind(succ, fail) ~ 1, family = betabinomial(link = "logit"), data = d)
+    glmmTMB(cbind(succ, fail) ~ 1, family = glmmTMB::betabinomial(), data = d)
   ), silent = TRUE)
   if (inherits(m, "try-error")) return(c(NA_real_, NA_real_))
 
-  # Criterion 2: optimizer convergence
-  if (!isTRUE(m$fit$convergence == 0L)) return(c(NA_real_, NA_real_))
-
-  # Criterion 3: pdHess — only reject if explicitly FALSE (not on NULL/absent)
-  pdHess <- tryCatch(m$sdr$pdHess, error = function(e) NULL)
-  if (isFALSE(pdHess)) return(c(NA_real_, NA_real_))
-
-  # Criterion 4: finite positive SE
-  se <- tryCatch(suppressWarnings(sqrt(vcov(m)$cond[1L, 1L])), error = function(e) NA_real_)
-  if (!is.finite(se) || se <= 0) return(c(NA_real_, NA_real_))
+  converged <- isTRUE(m$sdr$pdHess) && isTRUE(m$fit$convergence == 0L)
+  se        <- suppressWarnings(sqrt(vcov(m)$cond[1L, 1L]))
+  if (!converged || !is.finite(se) || se <= 0) return(c(NA_real_, NA_real_))
 
   c(fixef(m)$cond[["(Intercept)"]], se)
 }
@@ -207,18 +180,25 @@ reject_bb <- function(fit) {
   pnorm((fit[1L] - qlogis(threshold)) / fit[2L], lower.tail = FALSE) < alpha_level
 }
 
-# Naive exact binomial test on all N*k pooled outcomes.
+# Naive Wilson score test on all M = N*k pooled outcomes (the manuscript's
+# recommended test): base-R prop.test() without continuity correction, i.e.
+# the one-sided Wilson score test — reject iff the lower one-sided Wilson
+# bound exceeds p0. Equivalent to the critical-count form used in
+# proportion-calculator/index.html, X >= ceiling(M*p0 + z_alpha*sqrt(M*p0*q0)).
 reject_naive <- function(successes, k) {
-  binom.test(sum(successes), length(successes) * k,
-             p = threshold, alternative = "greater")$p.value < alpha_level
+  prop.test(sum(successes), length(successes) * k, p = threshold,
+            alternative = "greater", correct = FALSE)$p.value < alpha_level
 }
 
 # One dataset -> named rejection vector c(glmmTMB = T/F/NA, naive = T/F).
+# At k = 1 the Beta-Binomial is exactly Binomial, so both columns use the
+# Wilson score test (see header: the Wald GLM is degenerate at small N).
 sim_once <- function(N, k, a, b, dgp) {
   p         <- if (dgp == "betabinom") rbeta(N, a, b) else rep(a / (a + b), N)
   successes <- rbinom(N, size = k, prob = p)
-  c(glmmTMB = reject_bb(fit_bb(successes, k)),
-    naive   = reject_naive(successes, k))
+  naive     <- reject_naive(successes, k)
+  c(glmmTMB = if (k == 1L) naive else reject_bb(fit_bb(successes, k)),
+    naive   = naive)
 }
 
 # n_sims replications -> list(power, fail_glmmTMB).
@@ -254,7 +234,7 @@ pct_fmt <- function(x) paste0(round(100 * x), "%")
 to_long <- function(res, value_col, new_col) {
   rbind(
     data.frame(res, method = "glmmTMB (Beta-Binomial)", value = res$power_glmmTMB),
-    data.frame(res, method = "Naive binomial (pooled)", value = res$power_naive)
+    data.frame(res, method = "Naive Wilson score (pooled)", value = res$power_naive)
   )
 }
 
@@ -285,26 +265,29 @@ res1 <- run_grid(grid1)
 cat("\n"); print(res1[, c("scenario","C","k","N","power_glmmTMB","power_naive","fail_glmmTMB")],
                 digits = 3, row.names = FALSE)
 
+write.csv(res1, file.path(out_dir, "results_part1.csv"), row.names = FALSE)
+
 long1   <- to_long(res1)
 long1$C <- factor(long1$C)
 
-print(
-  ggplot(long1, aes(k, value, colour = C, group = C)) +
-    geom_hline(yintercept = 0.80, linetype = "dashed", colour = "grey50") +
-    geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
-    facet_grid(scenario ~ method) +
-    scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
-    labs(title    = "Part 1 — Power under equal costs  (C = N × k)",
-         subtitle = "k = 1 maximises power for every scenario and budget",
-         x = "k  (draws per entity;  N = C/k)", y = "Power", colour = "Budget C") +
-    theme_bw()
-)
+p1 <- ggplot(long1, aes(k, value, colour = C, group = C)) +
+  geom_hline(yintercept = 0.80, linetype = "dashed", colour = "grey50") +
+  geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
+  facet_grid(scenario ~ method) +
+  scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
+  labs(title    = "Part 1 — Power under equal costs  (C = N × k)",
+       subtitle = "k = 1 maximises power for every scenario and budget",
+       x = "k  (draws per entity;  N = C/k)", y = "Power", colour = "Budget C") +
+  theme_bw()
+print(p1)
+save_fig("power_equal_costs.png", p1, width = 9, height = 10)
 
 cat("\n── Convergence failures > 5% (Part 1) ──────────────────────────────────\n")
 f1 <- res1[res1$fail_glmmTMB > 0.05,
            c("scenario","C","k","N","fail_glmmTMB","power_glmmTMB")]
-if (nrow(f1)) print(f1[order(-f1$fail_glmmTMB), ], digits = 3, row.names = FALSE)
-else cat("  None\n")
+if (nrow(f1)){
+  print(f1[order(-f1$fail_glmmTMB), ], digits = 3, row.names = FALSE)
+} else {cat("  None\n")}
 cat("  Cells with fail_glmmTMB > 0.10 are unreliable (upward-biased power).\n\n")
 
 
@@ -328,26 +311,28 @@ res2 <- run_grid(grid2)
 cat("\n"); print(res2[, c("scenario","C","k","N","power_glmmTMB","power_naive","fail_glmmTMB")],
                 digits = 3, row.names = FALSE)
 
+write.csv(res2, file.path(out_dir, "results_part2.csv"), row.names = FALSE)
+
 long2   <- to_long(res2)
 long2$C <- factor(long2$C)
 
-print(
-  ggplot(long2, aes(k, value, colour = C, group = C)) +
-    geom_hline(yintercept = alpha_level, linetype = "dashed", colour = "red") +
-    geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
-    facet_grid(scenario ~ method) +
-    scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
-    labs(title    = "Part 2 — Type I error under H0  (mu = 0.90)",
-         subtitle = "glmmTMB tracks alpha = 0.05 (red line); naive binomial inflates when rho > 0",
-         x = "k  (draws per entity;  N = C/k)", y = "Type I error", colour = "Budget C") +
-    theme_bw()
-)
+p2 <- ggplot(long2, aes(k, value, colour = C, group = C)) +
+  geom_hline(yintercept = alpha_level, linetype = "dashed", colour = "red") +
+  geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
+  facet_grid(scenario ~ method) +
+  scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
+  labs(title    = "Part 2 — Type I error under H0  (mu = 0.90)",
+       subtitle = "glmmTMB tracks alpha = 0.05 (red line); naive Wilson score inflates when rho > 0 and k > 1",
+       x = "k  (draws per entity;  N = C/k)", y = "Type I error", colour = "Budget C") +
+  theme_bw()
+print(p2)
+save_fig("type1_equal_costs.png", p2, width = 9, height = 10)
 
 cat("\n── Convergence failures > 5% (Part 2) ──────────────────────────────────\n")
 f2 <- res2[res2$fail_glmmTMB > 0.05,
            c("scenario","C","k","N","fail_glmmTMB","power_glmmTMB")]
-if (nrow(f2)) print(f2[order(-f2$fail_glmmTMB), ], digits = 3, row.names = FALSE)
-else cat("  None\n")
+if (nrow(f2)) {print(f2[order(-f2$fail_glmmTMB), ], digits = 3, row.names = FALSE)
+} else {cat("  None\n")}
 cat("\n")
 
 
@@ -363,20 +348,20 @@ cat("\n")
 # c_N = 10   one question costs as much as 10 responses.
 # c_N = 20   very expensive entities (e.g., expert annotation or clinical setup).
 #
-# Analytic result: N_eff = N/VIF = B / [(c_N+k)(1+(k-1)*rho)].
-# Both factors in the denominator are increasing in k, so k = 1 is always
-# optimal. The simulation confirms this and quantifies the practical penalty
-# of k = 2, which is the minimum k for glmmTMB to identify overdispersion.
+# Analytic result: N_eff = N*k/VIF = B*k / [(c_N+k)(1+(k-1)*rho)], maximised
+# at k* = sqrt(c_N*(1-rho)/rho). k > 1 pays off when entities are expensive
+# relative to responses and/or rho is small. The table `opt3` below reports
+# k* next to the empirical optimum.
 #
-# Only glmmTMB power is shown (naive is excluded: it is always invalid under
-# clustering and adds no information about optimal design).
+# Only glmmTMB power is shown (naive is excluded: it is invalid under
+# clustering for k > 1 and adds no information about optimal design).
 #
 # Cells with N < 5 are excluded; at very high c_N all N are small so
 # convergence failures will be common and power will be low throughout.
 
-B       <- 300
-k_vals3 <- c(1, 2, 3, 5, 10)
-cN_vals <- c(0, 5, 10, 20)
+B       <- 1000
+k_vals3 <- c(1, 3, 5, 10, 20)
+cN_vals <- c(0, 3, 5, 10, 20)
 
 ck3         <- expand.grid(cN = cN_vals, k = k_vals3, stringsAsFactors = FALSE)
 grid3       <- merge(betas_h1, ck3, by = NULL)
@@ -391,48 +376,108 @@ res3 <- run_grid(grid3)
 cat("\n"); print(res3[, c("scenario","cN","k","N","power_glmmTMB","fail_glmmTMB")],
                 digits = 3, row.names = FALSE)
 
+write.csv(res3, file.path(out_dir, "results_part3.csv"), row.names = FALSE)
+
 res3$cost_label <- factor(paste0("c_N = ", res3$cN),
                            levels = paste0("c_N = ", sort(unique(res3$cN))))
 
-print(
-  ggplot(res3, aes(k, power_glmmTMB, colour = cost_label, group = cost_label)) +
-    geom_hline(yintercept = 0.80, linetype = "dashed", colour = "grey50") +
-    geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
-    facet_wrap(~ scenario, ncol = 2) +
-    scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
-    labs(title    = paste0("Part 3 — Power under unequal entity cost  (B = ", B, ")"),
-         subtitle = "B = N×(c_N+k)  |  k=1 optimal; penalty of k=2 shrinks as entities get expensive",
-         x = "k  (draws per entity)", y = "Power (glmmTMB)", colour = "Entity cost c_N") +
-    theme_bw() + theme(legend.position = "right")
-)
+p3 <- ggplot(res3, aes(k, power_glmmTMB, colour = cost_label, group = cost_label)) +
+  geom_hline(yintercept = 0.80, linetype = "dashed", colour = "grey50") +
+  geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
+  facet_wrap(~ scenario, ncol = 2) +
+  scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
+  labs(title    = paste0("Part 3 — Power under unequal entity cost  (B = ", B, ")"),
+       subtitle = "B = N×(c_N+k);  analytic optimum k* = sqrt(c_N(1-rho)/rho)",
+       x = "k  (draws per entity)", y = "Power (glmmTMB)", colour = "Entity cost c_N") +
+  theme_bw() + theme(legend.position = "right")
+print(p3)
+save_fig("power_unequal_costs.png", p3, width = 9, height = 8)
 
-cat("\n── Part 3: empirically optimal k by scenario and entity cost ────────────\n")
-cat("   (k_opt = argmax power_glmmTMB within each scenario × c_N cell)\n\n")
+cat("\n── Part 3: empirically optimal k vs analytic k* by scenario and entity cost ──\n")
+cat("   k_opt  = argmax power_glmmTMB within each scenario × c_N cell\n")
+cat("   k_star = sqrt(c_N (1-rho) / rho)   (analytic optimum, continuous k)\n\n")
 
-# For each scenario × c_N, find k with highest glmmTMB power; also report
-# power at k=1 so the penalty of the glmmTMB-feasible minimum (k=2) is visible.
 opt3 <- do.call(rbind, lapply(
   split(res3, list(res3$scenario, res3$cN), drop = TRUE),
   function(d) {
     best_i <- which.max(d$power_glmmTMB)
     if (!length(best_i)) return(NULL)
     best  <- d[best_i, ]
+    rho   <- 1 / (d$a[1L] + d$b[1L] + 1)
     pw_k1 <- d$power_glmmTMB[d$k == 1L]
-    pw_k2 <- d$power_glmmTMB[d$k == 2L]
     data.frame(
       scenario   = best$scenario,
       cN         = best$cN,
+      k_star     = round(sqrt(best$cN * (1 - rho) / rho), 1),
       k_opt      = best$k,
       N_at_k_opt = best$N,
       power_opt  = round(best$power_glmmTMB, 3),
       power_k1   = round(if (length(pw_k1)) pw_k1 else NA_real_, 3),
-      power_k2   = round(if (length(pw_k2)) pw_k2 else NA_real_, 3),
       fail_k_opt = round(best$fail_glmmTMB, 3)
     )
   }
 ))
 opt3 <- opt3[order(opt3$scenario, opt3$cN), ]
 print(opt3, row.names = FALSE)
-cat("\n  power_k1 and power_k2 enable comparison with the analytic optimum.\n")
-cat("  When k_opt = 1 for all c_N, the analytic result is fully confirmed.\n")
+write.csv(opt3, file.path(out_dir, "results_part3_optimal_k.csv"), row.names = FALSE)
+cat("\n  k_opt should track k_star (rounded to the simulated k grid).\n")
 cat("  Cells with fail_k_opt > 0.10 are flagged above during run_grid.\n")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONVERGENCE FAILURE SUMMARY  (all three parts)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# fail_glmmTMB = share of the n_sims replications whose Beta-Binomial fit was
+# dropped (see header). Written as a CSV table and plotted as heatmaps
+# (scenario x k, one panel per part x design). A cell is `unreliable` when
+# fail_glmmTMB > 0.10 or N_eff = N*k/VIF < 60 (small-sample Wald-test
+# conservatism); such cells are starred in the heatmap.
+
+conv_cols <- c("scenario", "a", "b", "k", "N", "fail_glmmTMB", "power_glmmTMB")
+conv <- rbind(
+  data.frame(part = "Part 1: power (equal cost)",  design = paste0("C = ",   res1$C),  res1[, conv_cols]),
+  data.frame(part = "Part 2: type I (equal cost)", design = paste0("C = ",   res2$C),  res2[, conv_cols]),
+  data.frame(part = "Part 3: power (unequal cost)", design = paste0("c_N = ", res3$cN), res3[, conv_cols])
+)
+conv$rho   <- ifelse(grepl("^Binomial", conv$scenario), 0, 1 / (conv$a + conv$b + 1))
+conv$N_eff <- round(conv$N * conv$k / (1 + (conv$k - 1) * conv$rho))
+conv$a <- NULL; conv$b <- NULL
+conv$flag_fail  <- conv$fail_glmmTMB > 0.10
+conv$flag_small <- conv$k > 1L & conv$N_eff < 60   # k = 1 uses the Wilson test: no Wald issue
+conv$unreliable <- conv$flag_fail | conv$flag_small
+write.csv(conv, file.path(out_dir, "convergence_failures.csv"), row.names = FALSE)
+
+cat("\n══ Convergence failure summary ══════════════════════════════════════════\n")
+cat(sprintf("  %d of %d cells have fail_glmmTMB > 10%%; %d have N_eff < 60; %d unreliable overall\n\n",
+            sum(conv$flag_fail), nrow(conv), sum(conv$flag_small), sum(conv$unreliable)))
+conv_by_scn <- aggregate(fail_glmmTMB ~ part + scenario, conv[conv$k > 1L, ],
+                         function(x) c(mean = mean(x), max = max(x)))
+conv_by_scn <- do.call(data.frame, conv_by_scn)
+names(conv_by_scn)[3:4] <- c("mean_fail", "max_fail")
+print(conv_by_scn[order(conv_by_scn$part, -conv_by_scn$mean_fail), ],
+      digits = 2, row.names = FALSE)
+cat("  (k = 1 cells excluded: exact binomial test, no fitting)\n")
+
+panel_lab    <- paste0(conv$part, "\n", conv$design)   # two lines: avoids strip clipping
+conv$panel   <- factor(panel_lab, levels = unique(panel_lab))
+conv$k_f     <- factor(conv$k, levels = sort(unique(conv$k)))
+conv$label   <- paste0(sprintf("%.0f%%", 100 * conv$fail_glmmTMB), ifelse(conv$flag_small, "*", ""))
+
+p_conv <- ggplot(conv, aes(k_f, scenario, fill = fail_glmmTMB)) +
+  geom_tile(colour = "white") +
+  geom_text(aes(label = label, colour = fail_glmmTMB > 0.35), size = 2.8) +
+  scale_colour_manual(values = c(`FALSE` = "black", `TRUE` = "white"), guide = "none") +
+  scale_fill_gradient(low = "#f7fbff", high = "#b2182b", limits = c(0, 1),
+                      labels = pct_fmt, name = "glmmTMB\nfailures") +
+  facet_wrap(~ panel, ncol = 3, scales = "free_y") +
+  labs(title    = "glmmTMB convergence failures by simulation cell",
+       subtitle = "Share of replications dropped (non-PD Hessian, non-convergence, or invalid SE). Unreliable: > 10% dropped, or * = N_eff = Nk/VIF < 60",
+       x = "k  (draws per entity)", y = NULL) +
+  theme_bw() +
+  theme(panel.grid = element_blank(), legend.position = "right",
+        strip.text = element_text(size = 8))
+print(p_conv)
+save_fig("convergence_failures.png", p_conv, width = 12, height = 10)
+
+cat(sprintf("\nOutputs written to '%s'.\n", normalizePath(out_dir)))

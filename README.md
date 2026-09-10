@@ -18,6 +18,8 @@ Two methods are computed side by side:
 
 Copy-ready R and Python code is generated for every result.
 
+A second tab, **Clustered design (Beta-Binomial)**, covers studies that judge k responses per prompt. It applies the variance inflation factor VIF = 1 + (k − 1)ρ to the Wilson score formulas, shows what the naive test would report versus what it actually delivers under clustering, and gives the cost-optimal number of responses per prompt.
+
 ## Running it
 
 Open `proportion-calculator/index.html` in a browser. Everything runs client-side; no build step or server needed.

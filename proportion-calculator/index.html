@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>One-Proportion Power Calculator</title>
-<meta name="description" content="Analytic sample size and power for one-sided single-proportion tests — Wilson score and Clopper-Pearson exact. Includes copy-ready R and Python code.">
+<title>LLM Evaluation Power Calculator</title>
+<meta name="description" content="Analytic sample size and power for one-sided proportion tests in LLM evaluation — Wilson score, Clopper-Pearson exact, and a VIF-corrected Beta-Binomial design for repeated responses per prompt. Includes copy-ready R and Python code.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500&display=swap">
@@ -58,6 +58,20 @@ h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.7rem,3.2vw,2.3rem)
 .field .hint{color:var(--muted);font-size:0.86rem;margin:0;}
 .field input{font:500 1rem var(--mono);color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:10px 12px;width:100%;max-width:220px;}
 .field.is-hidden{display:none;}
+
+/* tabs */
+.tab-nav{display:flex;border-bottom:2px solid var(--rule);margin:8px 0 4px;flex-wrap:wrap;}
+.tab-btn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:10px 22px 12px 0;margin-right:22px;cursor:pointer;font-family:var(--sans);font-size:0.97rem;font-weight:500;color:var(--muted);text-align:left;line-height:1.3;}
+.tab-btn small{display:block;font-size:0.77rem;font-weight:400;opacity:0.8;}
+.tab-btn.is-active{color:var(--accent-ink);border-bottom-color:var(--accent);}
+.tab-btn:hover:not(.is-active){color:var(--ink);}
+.tab-panel{display:none;}
+.tab-panel.is-active{display:block;}
+.cmp td .sub{display:block;font-size:0.78rem;color:var(--danger);font-weight:500;}
+.vif-line{font-family:var(--mono);font-size:0.86rem;background:var(--accent-tint);border-radius:5px;padding:9px 14px;margin:0 0 10px;color:var(--accent-ink);}
+.vif-line b{font-weight:500;color:var(--ink);}
+ol.takeaways{margin:0 0 14px;padding-left:1.3em;display:grid;gap:10px;}
+ol.takeaways b{font-weight:600;}
 
 /* result panel */
 .result-panel{position:sticky;top:24px;background:var(--surface);border:1px solid var(--rule);border-radius:8px;overflow:hidden;}
@@ -128,10 +142,17 @@ sup a{color:var(--accent-ink);font-size:0.75em;text-decoration:none;}
 <div class="page">
 
 <header>
-  <p class="eyebrow">Analytic power &amp; sample size · One-sided proportion test</p>
+  <p class="eyebrow">Analytic power &amp; sample size · LLM response evaluation</p>
   <h1>Sample size &amp; power for a single-proportion test</h1>
-  <p class="lede">Evaluate whether the true acceptable-response rate of an LLM exceeds a performance threshold p₀. Two methods: <b>Wilson score</b> (normal approximation, recommended) and <b>Clopper-Pearson exact</b> (exact binomial, no approximation). Copy-ready R and Python code is generated for every result.</p>
+  <p class="lede">Evaluate whether the true acceptable-response rate of an LLM exceeds a performance threshold p₀. Use the <b>one-proportion</b> tab when every judged response comes from a different prompt, and the <b>clustered</b> tab when the same prompt is answered several times. Copy-ready R and Python code is generated for every result.</p>
 </header>
+
+<nav class="tab-nav" role="tablist" aria-label="Study design">
+  <button class="tab-btn is-active" role="tab" aria-selected="true" aria-controls="tab1" id="tab-btn-1" data-tab="tab1">One-proportion test<small>one response per prompt</small></button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab2" id="tab-btn-2" data-tab="tab2">Clustered design (Beta-Binomial)<small>k responses per prompt</small></button>
+</nav>
+
+<div id="tab1" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-btn-1">
 
 <div class="calc">
   <form id="form" autocomplete="off" novalidate>
@@ -183,10 +204,10 @@ sup a{color:var(--accent-ink);font-size:0.75em;text-decoration:none;}
       <button class="lang-tab is-active" role="tab" data-lang="r" aria-selected="true">R</button>
       <button class="lang-tab" role="tab" data-lang="py" aria-selected="false">Python</button>
     </div>
-    <button class="copy-btn" id="copy-btn">Copy</button>
+    <button class="copy-btn">Copy</button>
   </div>
-  <pre class="code-block" id="code-r"></pre>
-  <pre class="code-block is-hidden" id="code-py"></pre>
+  <pre class="code-block" id="code-r" data-lang="r"></pre>
+  <pre class="code-block is-hidden" id="code-py" data-lang="py"></pre>
 </div>
 
 <div class="prose">
@@ -203,7 +224,7 @@ sup a{color:var(--accent-ink);font-size:0.75em;text-decoration:none;}
 <section>
   <h2>Assumptions</h2>
   <dl class="assume">
-    <div><dt>Responses are independent.</dt><dd>Each judgment is a separate, independent Bernoulli trial. <span class="why">Multiple responses to the same prompt violate independence and reduce effective N below the nominal count. These formulas will overstate power if responses are clustered by question.</span></dd></div>
+    <div><dt>Responses are independent.</dt><dd>Each judgment is a separate, independent Bernoulli trial. <span class="why">Multiple responses to the same prompt violate independence and reduce effective N below the nominal count. These formulas will overstate power if responses are clustered by prompt — use the <a href="#tab-btn-2" data-goto="tab2">clustered design</a> tab in that case.</span></dd></div>
     <div><dt>The rubric is fixed before data collection.</dt><dd><span class="why">Acceptable/not-acceptable criteria must be defined and locked before any responses are seen. Post-hoc rubric changes make the observed rate uninterpretable.</span></dd></div>
     <div><dt>Prompts are a representative sample from the target population.</dt><dd><span class="why">If your prompts are easier or differently distributed than real-world queries, the estimated rate applies to your prompt set, not deployment traffic.</span></dd></div>
     <div><dt>N is fixed before data collection.</dt><dd><span class="why">Sequential stopping or interim analyses alter the type I error unless explicitly accounted for.</span></dd></div>
@@ -221,6 +242,145 @@ sup a{color:var(--accent-ink);font-size:0.75em;text-decoration:none;}
 </section>
 
 </div>
+</div><!-- /tab1 -->
+
+<!-- ═══════════════════════ TAB 2 · clustered design (Beta-Binomial) ═══════════════════════ -->
+<div id="tab2" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-2">
+
+<div class="calc">
+  <form id="form2" autocomplete="off" novalidate>
+    <div class="mode" role="radiogroup" aria-label="Calculation mode">
+      <label><input type="radio" name="mode2" value="n" checked>Sample size<small>prompts needed</small></label>
+      <label><input type="radio" name="mode2" value="power">Power<small>from a fixed number of prompts</small></label>
+    </div>
+    <div class="fields">
+      <div class="field">
+        <label for="b-p0">Performance threshold (p₀)</label>
+        <input id="b-p0" type="number" min="0.001" max="0.999" step="0.01" value="0.90" inputmode="decimal">
+        <p class="hint">Null hypothesis: mean acceptable rate across prompts μ ≤ p₀.</p>
+      </div>
+      <div class="field">
+        <label for="b-p1">Expected proportion (μ₁)</label>
+        <input id="b-p1" type="number" min="0.001" max="1" step="0.01" value="0.95" inputmode="decimal">
+        <p class="hint">Your best estimate of the model's mean acceptable rate. Must exceed p₀.</p>
+      </div>
+      <div class="field">
+        <label for="b-alpha">Significance level (α)</label>
+        <input id="b-alpha" type="number" min="0.0001" max="0.5" step="0.01" value="0.05" inputmode="decimal">
+        <p class="hint">One-sided. Probability of a false positive.</p>
+      </div>
+      <div class="field" id="b-field-target">
+        <label for="b-target">Target power (1 − β)</label>
+        <input id="b-target" type="number" min="0.01" max="0.9999" step="0.05" value="0.80" inputmode="decimal">
+        <p class="hint">Probability of detecting μ₁ when it is the true mean rate.</p>
+      </div>
+      <div class="field is-hidden" id="b-field-n">
+        <label for="b-n">Number of prompts (n)</label>
+        <input id="b-n" type="number" min="1" max="100000" step="1" value="74" inputmode="numeric">
+        <p class="hint">Distinct prompts (questions) to evaluate.</p>
+      </div>
+      <div class="field">
+        <label for="b-k">Responses per prompt (k)</label>
+        <input id="b-k" type="number" min="1" max="1000" step="1" value="3" inputmode="numeric">
+        <p class="hint">How many times each prompt is answered and judged. k = 1 is the one-proportion design.</p>
+      </div>
+      <div class="field">
+        <label for="b-rho">Between-prompt correlation (ρ)</label>
+        <input id="b-rho" type="number" min="0" max="0.999" step="0.01" value="0.10" inputmode="decimal">
+        <p class="hint">Correlation between two judgments of the same prompt. 0 = all prompts equally hard; 0.02–0.1 when difficulty clusters near the mean; ≥ 0.5 when most prompts are always-pass or always-fail. See <a href="#choosing-rho">choosing ρ</a>.</p>
+      </div>
+      <div class="field">
+        <label for="b-cost">Cost of a new prompt (c, in responses)</label>
+        <input id="b-cost" type="number" min="0" max="100000" step="1" value="0" inputmode="decimal">
+        <p class="hint">Optional. How many judged responses one new prompt costs to create (0 = free). Used only to report the cost-optimal k.</p>
+      </div>
+    </div>
+  </form>
+
+  <aside class="result-panel" id="result-panel2" aria-live="polite">
+    <div class="rp-head">
+      <p class="rp-label" id="rp-label2">Result</p>
+    </div>
+    <div class="rp-body" id="rp-body2"></div>
+  </aside>
+</div>
+
+<div class="code-section">
+  <div class="cs-head">
+    <p class="cs-title">Reproduce this result</p>
+    <div class="lang-tabs" role="tablist">
+      <button class="lang-tab is-active" role="tab" data-lang="r" aria-selected="true">R</button>
+      <button class="lang-tab" role="tab" data-lang="py" aria-selected="false">Python</button>
+    </div>
+    <button class="copy-btn">Copy</button>
+  </div>
+  <pre class="code-block" id="code2-r" data-lang="r"></pre>
+  <pre class="code-block is-hidden" id="code2-py" data-lang="py"></pre>
+</div>
+
+<div class="prose">
+
+<section>
+  <h2>When responses are clustered by prompt</h2>
+  <p>If the same prompt is answered k times, those k judgments are not independent: a hard prompt tends to fail every time and an easy one to pass every time. Each prompt <span class="m">i</span> has its own acceptable rate <span class="m">p<sub>i</sub></span>, and its responses share it. Statistically, <span class="m">p<sub>i</sub> ~ Beta(a, b)</span> and <span class="m">X<sub>i</sub> | p<sub>i</sub> ~ Binomial(k, p<sub>i</sub>)</span> — the Beta-Binomial model. Two numbers summarise it: the mean rate <span class="m">μ = a/(a+b)</span>, which is what the test is about, and the between-prompt correlation <span class="m">ρ = 1/(a+b+1)</span>, which measures how much prompts differ in difficulty.<sup><a href="#ref9">[9]</a></sup></p>
+  <p>Clustering inflates the variance of the pooled proportion by the <em>design effect</em>, or variance inflation factor:<sup><a href="#ref4">[4]</a><a href="#ref5">[5]</a><a href="#ref6">[6]</a></sup></p>
+  <pre class="formula">VIF = 1 + (k − 1)·ρ</pre>
+  <p>so n·k judged responses carry only n·k / VIF responses' worth of information. The calculator plans with the Wilson score test of the first tab, with the null standard error multiplied by √VIF:</p>
+  <pre class="formula">N_iid  = ( z_α·√(p₀q₀) + z_β·√(μ₁q₁) )² / (μ₁ − p₀)²   responses needed if independent
+n      = ⌈ VIF · N_iid / k ⌉                            prompts;   N = n·k total responses
+power  = Φ( ( (μ₁ − p₀)·√(N/VIF) − z_α·√(p₀q₀) ) / √(μ₁q₁) )
+reject H₀ if  X ≥ ⌈ N·p₀ + z_α·√(N·p₀q₀·VIF) ⌉</pre>
+  <p>ρ is treated as a known planning value. With k = 1, VIF = 1 for any ρ and everything reduces to the one-proportion tab. The "naive" column in the result panel shows what the one-proportion formulas would claim for the same design, and what they would actually deliver: the naive test's true false-positive rate is 1 − Φ(z_α/√VIF), not α.</p>
+</section>
+
+<section>
+  <h2>Design takeaways</h2>
+  <ol class="takeaways">
+    <li><b>Prefer new prompts over repeated responses.</b> For a fixed number of judged responses, every response spent re-asking a prompt buys less information than a response on a new prompt (VIF ≥ 1). k = 1 maximises power, for any ρ.</li>
+    <li><b>With one response per prompt the simple test is exactly valid.</b> Each outcome is then an independent draw with probability μ, however widely prompt difficulty varies. Nothing needs correcting.</li>
+    <li><b>If you repeat prompts and ignore it, the false-positive rate rises to 1 − Φ(z_α/√VIF).</b> How much depends on ρ: with k = 5, a nominal 5% test really runs at 6.7% when ρ = 0.05 but at 17% when ρ = 0.5. Prompt pools dominated by always-pass / always-fail prompts (large ρ) are where the naive test fails badly; when difficulty clusters near the mean (ρ ≲ 0.05) the inflation is modest.</li>
+    <li><b>Repeating prompts pays only when new prompts are expensive and difficulty is homogeneous.</b> If a new prompt costs c responses to create, the cost-optimal number of responses per prompt is<sup><a href="#ref7">[7]</a><a href="#ref8">[8]</a></sup>
+      <pre class="formula">k* = √( c · (1 − ρ) / ρ )</pre>
+      For c = 10: k* ≈ 14 when ρ = 0.05, ≈ 3 when ρ = 0.5, ≈ 1.4 when ρ = 0.83. Enter c above and the result panel reports k*.</li>
+  </ol>
+</section>
+
+<section id="choosing-rho">
+  <h2>Choosing ρ</h2>
+  <p>ρ is the correlation between two judgments of the same prompt — equivalently, the share of outcome variance that comes from prompts differing in difficulty. For a Beta(a, b) spread of difficulties, ρ = 1/(a+b+1). Rules of thumb:</p>
+  <dl class="assume">
+    <div><dt>ρ = 0</dt><dd>Every prompt equally hard. <span class="why">Pure binomial; rarely realistic.</span></dd></div>
+    <div><dt>ρ ≈ 0.02–0.1</dt><dd>Difficulty varies but most prompts sit near the mean. <span class="why">Beta(38, 2) gives ρ = 0.024; Beta(19, 1) gives 0.048. Typical for curated question sets with a graded rubric.</span></dd></div>
+    <div><dt>ρ ≥ 0.5</dt><dd>Most prompts are effectively always-pass or always-fail. <span class="why">Beta(0.95, 0.05) gives ρ = 0.5. Typical for deterministic tasks, low-temperature sampling, or pass/fail unit-test style grading.</span></dd></div>
+  </dl>
+  <p>From pilot data with k responses per prompt, estimate ρ by fitting a Beta-Binomial model (e.g. R <code>glmmTMB(cbind(y, k − y) ~ 1, family = betabinomial)</code>; ρ̂ = 1/(1 + φ̂)) or with the ANOVA estimator.<sup><a href="#ref9">[9]</a></sup> When unsure, plan with a larger ρ — it is the conservative choice.</p>
+</section>
+
+<section>
+  <h2>Assumptions</h2>
+  <dl class="assume">
+    <div><dt>Every prompt gets the same k responses.</dt><dd><span class="why">With unequal k, use the harmonic mean of k; the result is slightly conservative.</span></dd></div>
+    <div><dt>Responses to a prompt are independent given the prompt.</dt><dd><span class="why">Shared conversation history, caching, or near-zero temperature make responses more alike than ρ allows and understate the true VIF.</span></dd></div>
+    <div><dt>ρ is a planning constant.</dt><dd><span class="why">The analysis of collected data should estimate it (Beta-Binomial regression); realised power is then a little below the planned value. Set the target power a few points above the minimum you need.</span></dd></div>
+    <div><dt>N is large enough for the normal approximation.</dt><dd><span class="why">Require N·(1 − p₀)/VIF ≥ 10 — for p₀ = 0.90, at least 100 effective responses (N/VIF). Below roughly 60 effective responses, model-based analyses of the collected data (a Beta-Binomial fit with a Wald test) become markedly conservative and often fail to converge; plan above that floor.</span></dd></div>
+    <div><dt>All one-proportion assumptions still apply.</dt><dd><span class="why">Fixed rubric, prompts sampled from the target distribution, N fixed in advance, accurate judges.</span></dd></div>
+  </dl>
+</section>
+
+<section>
+  <h2>References</h2>
+  <ol class="refs" start="4">
+    <li id="ref4"><span class="ref-cite">Kish 1965</span> — Kish, L. (1965). <i>Survey Sampling</i>. Wiley, New York. (Design effect.)</li>
+    <li id="ref5"><span class="ref-cite">Donner, Birkett &amp; Buck 1981</span> — Donner, A., Birkett, N., &amp; Buck, C. (1981). Randomization by cluster: sample size requirements and analysis. <i>American Journal of Epidemiology</i>, 114(6), 906–914. <a href="https://doi.org/10.1093/oxfordjournals.aje.a113261" target="_blank" rel="noopener">doi:10.1093/oxfordjournals.aje.a113261</a></li>
+    <li id="ref6"><span class="ref-cite">Donner &amp; Klar 2000</span> — Donner, A., &amp; Klar, N. (2000). <i>Design and Analysis of Cluster Randomization Trials in Health Research</i>. Arnold, London.</li>
+    <li id="ref7"><span class="ref-cite">Cochran 1977</span> — Cochran, W. G. (1977). <i>Sampling Techniques</i> (3rd ed.), Ch. 10: two-stage sampling and optimal subsample size. Wiley.</li>
+    <li id="ref8"><span class="ref-cite">Raudenbush 1997</span> — Raudenbush, S. W. (1997). Statistical analysis and optimal design for cluster randomized trials. <i>Psychological Methods</i>, 2(2), 173–185. <a href="https://doi.org/10.1037/1082-989X.2.2.173" target="_blank" rel="noopener">doi:10.1037/1082-989X.2.2.173</a></li>
+    <li id="ref9"><span class="ref-cite">Ridout, Demétrio &amp; Firth 1999</span> — Ridout, M. S., Demétrio, C. G. B., &amp; Firth, D. (1999). Estimating intraclass correlation for binary data. <i>Biometrics</i>, 55(1), 137–148. <a href="https://doi.org/10.1111/j.0006-341X.1999.00137.x" target="_blank" rel="noopener">doi:10.1111/j.0006-341X.1999.00137.x</a></li>
+  </ol>
+</section>
+
+</div>
+</div><!-- /tab2 -->
 
 <footer>
   All calculations run in your browser — nothing is sent anywhere. The R and Python code above reproduces every result exactly and can be pasted directly into a session to verify independently.
@@ -502,31 +662,263 @@ function render(){
   $('code-py').textContent=genPy(v,rW,rE);
 }
 
+/* ═══════════ Tab 2: clustered design (Beta-Binomial), VIF-corrected Wilson score ═══════════ */
+function vifOf(k,rho){return 1+(k-1)*rho;}
+function iidN(p0,p1,alpha,target){
+  var za=qnorm(1-alpha),zb=qnorm(target),s0=Math.sqrt(p0*(1-p0)),s1=Math.sqrt(p1*(1-p1));
+  return Math.pow((za*s0+zb*s1)/(p1-p0),2);
+}
+function bbAt(n,k,p0,p1,alpha,rho){
+  var za=qnorm(1-alpha),s0=Math.sqrt(p0*(1-p0)),s1=Math.sqrt(p1*(1-p1));
+  var vif=vifOf(k,rho),N=n*k;
+  var crit=Math.min(Math.ceil(N*p0+za*Math.sqrt(N*p0*(1-p0)*vif)),N+1);
+  var power=s1===0?(p1>p0?1:0):normCdf(((p1-p0)*Math.sqrt(N/vif)-za*s0)/s1);
+  return{n:n,k:k,N:N,vif:vif,crit:crit,power:Math.max(0,power),nEff:N/vif};
+}
+function bbSampleSize(k,p0,p1,alpha,target,rho){
+  var n=Math.max(1,Math.ceil(vifOf(k,rho)*iidN(p0,p1,alpha,target)/k));
+  return bbAt(n,k,p0,p1,alpha,rho);
+}
+/* What the one-proportion (naive) test claims for n*k clustered responses, and what it actually delivers. */
+function naiveOnClustered(n,k,p0,p1,alpha,rho){
+  var za=qnorm(1-alpha),s0=Math.sqrt(p0*(1-p0)),s1=Math.sqrt(p1*(1-p1)),vif=vifOf(k,rho),N=n*k;
+  var w=wilsonAt(N,p0,p1,alpha);
+  var truePow=s1===0?(p1>p0?1:0):normCdf(((p1-p0)*Math.sqrt(N)-za*s0)/(s1*Math.sqrt(vif)));
+  return{n:n,N:N,crit:w.crit,statedPower:w.power,truePower:Math.max(0,truePow),trueAlpha:Math.max(0,1-normCdf(za/Math.sqrt(vif)))};
+}
+function kStar(cost,rho){return Math.sqrt(cost*(1-rho)/rho);}
+
+function genR2(v,rB,rN){
+  var c='# ',L=[];
+  var za=qnorm(1-v.alpha),s0=Math.sqrt(v.p0*(1-v.p0)),s1=Math.sqrt(v.p1*(1-v.p1));
+  L.push(c+'── Parameters ─────────────────────────────────────────────────────────');
+  L.push('p0    <- '+v.p0+'   '+c+'performance threshold (H₀: μ ≤ p₀)');
+  L.push('mu1   <- '+v.p1+'   '+c+'expected mean acceptable rate (H₁: μ = μ₁)');
+  L.push('alpha <- '+v.alpha+'  '+c+'one-sided significance level');
+  L.push('k     <- '+v.k+'L     '+c+'responses per prompt');
+  L.push('rho   <- '+v.rho+'   '+c+'between-prompt correlation (ICC)');
+  if(v.mode==='n') L.push('target <- '+v.target+'  '+c+'target power');
+  else             L.push('n <- '+v.n+'L      '+c+'prompts (fixed)');
+  L.push('');
+  L.push(c+'── Beta-Binomial design: Wilson score test with VIF correction ────────');
+  L.push('za  <- qnorm(1 - alpha)       '+c+fR(za));
+  L.push('s0  <- sqrt(p0 * (1 - p0))    '+c+fR(s0,4)+' (null SE factor)');
+  L.push('s1  <- sqrt(mu1 * (1 - mu1))  '+c+fR(s1,4)+' (alt SE factor)');
+  L.push('VIF <- 1 + (k - 1) * rho      '+c+fR(rB.vif,3)+' (design effect)');
+  L.push('');
+  if(v.mode==='n'){
+    L.push('zb    <- qnorm(target)                          '+c+fR(qnorm(v.target)));
+    L.push('N_iid <- ((za * s0 + zb * s1) / (mu1 - p0))^2   '+c+fR(iidN(v.p0,v.p1,v.alpha,v.target),1)+' responses if independent');
+    L.push('n     <- ceiling(VIF * N_iid / k)               '+c+rB.n+' prompts');
+  }
+  L.push('N     <- n * k                                  '+c+rB.N+' total responses');
+  L.push('crit  <- ceiling(N * p0 + za * sqrt(N * p0 * (1 - p0) * VIF))  '+c+rB.crit);
+  L.push('power <- pnorm(((mu1 - p0) * sqrt(N / VIF) - za * s0) / s1)    '+c+fR(rB.power));
+  L.push('');
+  L.push('cat(sprintf("Beta-Binomial: n = %d prompts x k = %d = %d responses; reject if X >= %d; power = %.4f\\n",');
+  L.push('            n, k, N, crit, power))');
+  L.push('');
+  L.push(c+'── Naive one-proportion test on the same design (clustering ignored) ──');
+  if(v.mode==='n'){
+    L.push('n_naive <- ceiling(N_iid / k)                   '+c+rN.n+' prompts the naive formula asks for');
+    L.push('N_naive <- n_naive * k                          '+c+rN.N);
+  } else {
+    L.push('N_naive <- N');
+  }
+  L.push('claimed_power <- pnorm(((mu1 - p0) * sqrt(N_naive) - za * s0) / s1)               '+c+fR(rN.statedPower));
+  L.push('actual_power  <- pnorm(((mu1 - p0) * sqrt(N_naive) - za * s0) / (s1 * sqrt(VIF)))  '+c+fR(rN.truePower)+' (under clustering)');
+  L.push('actual_alpha  <- pnorm(za / sqrt(VIF), lower.tail = FALSE)                          '+c+fR(rN.trueAlpha)+' (true type I error)');
+  L.push('');
+  L.push('cat(sprintf("Naive:         claims power %.4f at alpha %s; actually power %.4f at alpha %.4f\\n",');
+  L.push('            claimed_power, alpha, actual_power, actual_alpha))');
+  if(v.cost>0&&v.rho>0){
+    L.push('');
+    L.push(c+'── Cost-optimal responses per prompt (a new prompt costs c responses) ──');
+    L.push('c_prompt <- '+v.cost);
+    L.push('k_star   <- sqrt(c_prompt * (1 - rho) / rho)     '+c+fR(kStar(v.cost,v.rho),2));
+  }
+  return L.join('\n');
+}
+
+function genPy2(v,rB,rN){
+  var c='# ',L=[];
+  var za=qnorm(1-v.alpha),s0=Math.sqrt(v.p0*(1-v.p0)),s1=Math.sqrt(v.p1*(1-v.p1));
+  L.push('from math import sqrt, ceil');
+  L.push('from scipy.stats import norm');
+  L.push('');
+  L.push(c+'── Parameters ─────────────────────────────────────────────────────────');
+  L.push('p0    = '+v.p0+'   '+c+'performance threshold (H₀: μ ≤ p₀)');
+  L.push('mu1   = '+v.p1+'   '+c+'expected mean acceptable rate (H₁: μ = μ₁)');
+  L.push('alpha = '+v.alpha+'  '+c+'one-sided significance level');
+  L.push('k     = '+v.k+'      '+c+'responses per prompt');
+  L.push('rho   = '+v.rho+'   '+c+'between-prompt correlation (ICC)');
+  if(v.mode==='n') L.push('target = '+v.target+'  '+c+'target power');
+  else             L.push('n = '+v.n+'      '+c+'prompts (fixed)');
+  L.push('');
+  L.push(c+'── Beta-Binomial design: Wilson score test with VIF correction ────────');
+  L.push('za  = norm.ppf(1 - alpha)      '+c+fR(za));
+  L.push('s0  = sqrt(p0 * (1 - p0))     '+c+fR(s0,4)+' (null SE factor)');
+  L.push('s1  = sqrt(mu1 * (1 - mu1))   '+c+fR(s1,4)+' (alt SE factor)');
+  L.push('VIF = 1 + (k - 1) * rho       '+c+fR(rB.vif,3)+' (design effect)');
+  L.push('');
+  if(v.mode==='n'){
+    L.push('zb    = norm.ppf(target)                        '+c+fR(qnorm(v.target)));
+    L.push('N_iid = ((za * s0 + zb * s1) / (mu1 - p0))**2   '+c+fR(iidN(v.p0,v.p1,v.alpha,v.target),1)+' responses if independent');
+    L.push('n     = ceil(VIF * N_iid / k)                   '+c+rB.n+' prompts');
+  }
+  L.push('N     = n * k                                   '+c+rB.N+' total responses');
+  L.push('crit  = ceil(N * p0 + za * sqrt(N * p0 * (1 - p0) * VIF))     '+c+rB.crit);
+  L.push('power = norm.cdf(((mu1 - p0) * sqrt(N / VIF) - za * s0) / s1)  '+c+fR(rB.power));
+  L.push('');
+  L.push('print(f"Beta-Binomial: n = {n} prompts x k = {k} = {N} responses; reject if X >= {crit}; power = {power:.4f}")');
+  L.push('');
+  L.push(c+'── Naive one-proportion test on the same design (clustering ignored) ──');
+  if(v.mode==='n'){
+    L.push('n_naive = ceil(N_iid / k)                       '+c+rN.n+' prompts the naive formula asks for');
+    L.push('N_naive = n_naive * k                           '+c+rN.N);
+  } else {
+    L.push('N_naive = N');
+  }
+  L.push('claimed_power = norm.cdf(((mu1 - p0) * sqrt(N_naive) - za * s0) / s1)               '+c+fR(rN.statedPower));
+  L.push('actual_power  = norm.cdf(((mu1 - p0) * sqrt(N_naive) - za * s0) / (s1 * sqrt(VIF)))  '+c+fR(rN.truePower)+' (under clustering)');
+  L.push('actual_alpha  = norm.sf(za / sqrt(VIF))                                              '+c+fR(rN.trueAlpha)+' (true type I error)');
+  L.push('');
+  L.push('print(f"Naive:         claims power {claimed_power:.4f} at alpha {alpha}; actually power {actual_power:.4f} at alpha {actual_alpha:.4f}")');
+  if(v.cost>0&&v.rho>0){
+    L.push('');
+    L.push(c+'── Cost-optimal responses per prompt (a new prompt costs c responses) ──');
+    L.push('c_prompt = '+v.cost);
+    L.push('k_star   = sqrt(c_prompt * (1 - rho) / rho)      '+c+fR(kStar(v.cost,v.rho),2));
+  }
+  return L.join('\n');
+}
+
+function readInputs2(){
+  var mode=document.querySelector('#form2 input[name="mode2"]:checked').value;
+  var v={mode:mode,p0:parseFloat($('b-p0').value),p1:parseFloat($('b-p1').value),
+    alpha:parseFloat($('b-alpha').value),target:parseFloat($('b-target').value),
+    n:parseInt($('b-n').value,10),k:parseInt($('b-k').value,10),
+    rho:parseFloat($('b-rho').value),cost:parseFloat($('b-cost').value)};
+  if(!(v.cost>=0))v.cost=0;
+  var errs=[];
+  if(!(v.p0>0&&v.p0<1))errs.push('Threshold must be between 0 and 1.');
+  if(!(v.p1>0&&v.p1<=1))errs.push('Expected proportion must be between 0 and 1.');
+  if(v.p0>0&&v.p0<1&&v.p1>0&&v.p1<=1&&v.p1<=v.p0)errs.push('Expected proportion must exceed the threshold.');
+  if(!(v.alpha>0&&v.alpha<1))errs.push('Significance level must be between 0 and 1.');
+  if(mode==='n'&&!(v.target>0&&v.target<1))errs.push('Target power must be between 0 and 1.');
+  if(mode==='power'&&!(Number.isInteger(v.n)&&v.n>=1))errs.push('Number of prompts must be a positive whole number.');
+  if(!(Number.isInteger(v.k)&&v.k>=1))errs.push('Responses per prompt must be a positive whole number.');
+  if(!(v.rho>=0&&v.rho<1))errs.push('Correlation ρ must be at least 0 and below 1.');
+  v.errors=errs;return v;
+}
+
+function syncMode2(){
+  var mode=document.querySelector('#form2 input[name="mode2"]:checked').value;
+  $('b-field-target').classList.toggle('is-hidden',mode!=='n');
+  $('b-field-n').classList.toggle('is-hidden',mode!=='power');
+}
+
+function render2(){
+  var v=readInputs2();
+  var panel=$('result-panel2'),label=$('rp-label2'),body=$('rp-body2');
+
+  if(v.errors.length){
+    panel.classList.add('is-error');
+    label.textContent='Check inputs';
+    body.innerHTML=v.errors.map(function(e){return'<p class="result-error">'+esc(e)+'</p>';}).join('');
+    $('code2-r').textContent='';$('code2-py').textContent='';
+    return;
+  }
+  panel.classList.remove('is-error');
+
+  var rB,rN;
+  if(v.mode==='n'){
+    rB=bbSampleSize(v.k,v.p0,v.p1,v.alpha,v.target,v.rho);
+    rN=naiveOnClustered(Math.max(1,Math.ceil(iidN(v.p0,v.p1,v.alpha,v.target)/v.k)),v.k,v.p0,v.p1,v.alpha,v.rho);
+    label.textContent='Prompts needed';
+  } else {
+    rB=bbAt(v.n,v.k,v.p0,v.p1,v.alpha,v.rho);
+    rN=naiveOnClustered(v.n,v.k,v.p0,v.p1,v.alpha,v.rho);
+    label.textContent='Power at n = '+fN(v.n)+' prompts × k = '+v.k;
+  }
+  var clustered=v.k>1&&v.rho>0;
+
+  var html='<table class="cmp"><thead><tr><th></th><th class="wilson">Beta-Binomial</th><th class="cp">Naive (ignores ρ)</th></tr></thead><tbody>';
+  if(v.mode==='n') html+='<tr><td>Prompts (n)</td><td class="w">'+fN(rB.n)+'</td><td class="c">'+fN(rN.n)+'</td></tr>';
+  html+='<tr><td>Total responses (n·k)</td><td class="w">'+fN(rB.N)+'</td><td class="c">'+fN(rN.N)+'</td></tr>';
+  html+='<tr><td>Reject if</td><td class="w">'+(rB.crit>rB.N?'—':'X ≥ '+fN(rB.crit))+'</td><td class="c">'+(rN.crit>rN.N?'—':'X ≥ '+fN(rN.crit))+'</td></tr>';
+  html+='<tr><td>Power at μ₁</td><td class="w">'+fP(rB.power)+'</td><td class="c">'+fP(rN.statedPower)+(clustered?' claimed<span class="sub">actual '+fP(rN.truePower)+'</span>':'')+'</td></tr>';
+  html+='<tr><td>Type I error (α)</td><td>nominal '+esc(v.alpha)+'</td><td class="c">'+esc(v.alpha)+(clustered?' claimed<span class="sub">actual '+fV(rN.trueAlpha,4)+'</span>':'')+'</td></tr>';
+  html+='</tbody></table>';
+
+  var dec=rB.crit>rB.N
+    ?'Cannot reject H₀ with this design — increase the number of prompts.'
+    :'Judge <b>'+fN(rB.n)+'</b> prompts × <b>'+v.k+'</b> responses = <b>'+fN(rB.N)+'</b> responses. Reject H₀ if at least <b>'+fN(rB.crit)+'</b> ('+fP(rB.crit/rB.N)+') are acceptable.';
+  html+='<p class="decision">'+dec+'</p>';
+  html+='<p class="vif-line">VIF = 1 + (k − 1)·ρ = <b>'+fV(rB.vif,3)+'</b> &nbsp;·&nbsp; effective independent responses N/VIF = <b>'+fN(Math.round(rB.nEff))+'</b></p>';
+
+  var costMsg;
+  if(v.cost>0){
+    if(v.rho>0){
+      var ks=kStar(v.cost,v.rho);
+      costMsg='A new prompt costs '+esc(v.cost)+' responses: cost-optimal k* = √(c(1−ρ)/ρ) = <b>'+fV(ks,1)+'</b>'+(ks<1.5?' — do not repeat prompts.':' — use about '+Math.round(ks)+' responses per prompt.');
+    } else {
+      costMsg='With ρ = 0 a repeated response is worth as much as a new prompt, so any larger k is cheaper — but ρ = 0 is rarely realistic; enter a positive ρ.';
+    }
+  } else {
+    costMsg=v.k>1
+      ?'Prompts cost nothing extra here, so k = 1 gives the most power per judged response. Enter a prompt cost above to see when repeating is worthwhile.'
+      :'k = 1 maximises power per judged response whenever new prompts are no more expensive than new responses.';
+  }
+  html+='<p class="hint" style="margin:0">'+costMsg+'</p>';
+
+  if(!clustered){
+    html+='<div class="note"><b>No clustering penalty.</b> With '+(v.k===1?'k = 1':'ρ = 0')+', VIF = 1 and this is exactly the one-proportion Wilson score design.</div>';
+  } else if(rN.trueAlpha>v.alpha+0.005){
+    html+='<div class="note"><b>Ignoring clustering</b> would run a nominal '+fP(v.alpha)+' test at an actual '+fP(rN.trueAlpha)+(v.mode==='n'?' and deliver '+fP(rN.truePower)+' power instead of the '+fP(rN.statedPower)+' it claims.':'.')+'</div>';
+  }
+
+  body.innerHTML=html;
+  $('code2-r').textContent=genR2(v,rB,rN);
+  $('code2-py').textContent=genPy2(v,rB,rN);
+}
+
 /* ── wiring ── */
 $('form').addEventListener('input',function(){syncMode();render();});
 $('form').addEventListener('change',function(){syncMode();render();});
 $('form').addEventListener('submit',function(e){e.preventDefault();});
+$('form2').addEventListener('input',function(){syncMode2();render2();});
+$('form2').addEventListener('change',function(){syncMode2();render2();});
+$('form2').addEventListener('submit',function(e){e.preventDefault();});
 
-document.querySelectorAll('.lang-tab').forEach(function(btn){
-  btn.addEventListener('click',function(){
-    document.querySelectorAll('.lang-tab').forEach(function(b){b.classList.remove('is-active');b.setAttribute('aria-selected','false');});
-    document.querySelectorAll('.code-block').forEach(function(b){b.classList.add('is-hidden');});
-    btn.classList.add('is-active');btn.setAttribute('aria-selected','true');
-    $('code-'+btn.dataset.lang).classList.remove('is-hidden');
+function showTab(id){
+  document.querySelectorAll('.tab-btn').forEach(function(b){var on=b.dataset.tab===id;b.classList.toggle('is-active',on);b.setAttribute('aria-selected',on?'true':'false');});
+  document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.toggle('is-active',p.id===id);});
+}
+document.querySelectorAll('.tab-btn').forEach(function(btn){btn.addEventListener('click',function(){showTab(btn.dataset.tab);});});
+document.querySelectorAll('[data-goto]').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();showTab(a.dataset.goto);window.scrollTo({top:0});});});
+
+document.querySelectorAll('.code-section').forEach(function(sec){
+  var tabs=sec.querySelectorAll('.lang-tab'),blocks=sec.querySelectorAll('.code-block'),cb=sec.querySelector('.copy-btn');
+  tabs.forEach(function(btn){
+    btn.addEventListener('click',function(){
+      tabs.forEach(function(b){b.classList.remove('is-active');b.setAttribute('aria-selected','false');});
+      blocks.forEach(function(b){b.classList.toggle('is-hidden',b.dataset.lang!==btn.dataset.lang);});
+      btn.classList.add('is-active');btn.setAttribute('aria-selected','true');
+    });
   });
-});
-
-$('copy-btn').addEventListener('click',function(){
-  var active=document.querySelector('.code-block:not(.is-hidden)');
-  if(!active)return;
-  navigator.clipboard.writeText(active.textContent).then(function(){
-    var btn=$('copy-btn');
-    btn.textContent='Copied!';btn.classList.add('copied');
-    setTimeout(function(){btn.textContent='Copy';btn.classList.remove('copied');},1800);
+  cb.addEventListener('click',function(){
+    var active=sec.querySelector('.code-block:not(.is-hidden)');
+    if(!active)return;
+    navigator.clipboard.writeText(active.textContent).then(function(){
+      cb.textContent='Copied!';cb.classList.add('copied');
+      setTimeout(function(){cb.textContent='Copy';cb.classList.remove('copied');},1800);
+    });
   });
 });
 
 syncMode();render();
+syncMode2();render2();
 
 })();
 </script>
