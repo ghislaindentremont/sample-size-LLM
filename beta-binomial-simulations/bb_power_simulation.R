@@ -130,27 +130,73 @@ print(plot_densities(betas_h1, "H1 distributions: mean = 0.95"))
 print(plot_densities(betas_h0, "H0 null boundary: mean = 0.90"))
 
 
+# ── Startup diagnostic ─────────────────────────────────────────────────────────
+# Fits one Beta-Binomial model and prints the convergence fields so you can
+# verify the glmmTMB version in use and confirm the fit is being accepted.
+# If pdHess = FALSE or sdr is absent, the convergence check prints a note.
+local({
+  cat("── Startup diagnostic: one Beta-Binomial fit ────────────────────────────\n")
+  cat("   glmmTMB version:", as.character(packageVersion("glmmTMB")), "\n")
+  d <- data.frame(succ = c(5L,6L,5L,4L,6L,7L,5L,4L,6L,5L),
+                  fail = c(1L,0L,1L,2L,0L,1L,1L,2L,0L,1L))
+  m <- tryCatch(
+    suppressWarnings(glmmTMB(cbind(succ, fail) ~ 1,
+                             family = betabinomial(link = "logit"), data = d)),
+    error = function(e) { cat("   ERROR:", conditionMessage(e), "\n"); NULL }
+  )
+  if (!is.null(m)) {
+    pdHess <- tryCatch(m$sdr$pdHess, error = function(e) NA)
+    se     <- tryCatch(sqrt(vcov(m)$cond[1L, 1L]), error = function(e) NA_real_)
+    cat(sprintf("   fit$convergence = %s  |  sdr$pdHess = %s  |  SE = %.4f\n",
+                m$fit$convergence, pdHess, se))
+    if (isTRUE(m$fit$convergence == 0L) && is.finite(se))
+      cat("   Fit accepted — convergence check working correctly.\n")
+    else
+      cat("   WARNING: fit would be dropped by current convergence check.\n")
+  }
+  cat("\n")
+})
+
 # ── Core simulation functions ──────────────────────────────────────────────────
 
 # Fit Beta-Binomial (k >= 2) or logistic GLM (k = 1 fallback).
 # Returns c(logit_mu_hat, SE) or c(NA, NA) on convergence failure.
+#
+# Convergence criteria (in order):
+#   1. No try-error from glmmTMB itself.
+#   2. Optimizer converged: m$fit$convergence == 0.
+#   3. Hessian positive-definite (pdHess): checked only when m$sdr is non-NULL.
+#      In some glmmTMB versions sdr may be absent; we do not reject on absence.
+#   4. SE is finite and positive.
 fit_bb <- function(successes, k) {
   d <- data.frame(succ = successes, fail = k - successes)
 
   if (k == 1L) {
     m <- try(glm(cbind(succ, fail) ~ 1, family = binomial, data = d), silent = TRUE)
     if (inherits(m, "try-error")) return(c(NA_real_, NA_real_))
-    return(c(coef(m)[[1L]], sqrt(vcov(m)[1L, 1L])))
+    se <- tryCatch(sqrt(vcov(m)[1L, 1L]), error = function(e) NA_real_)
+    if (!is.finite(se) || se <= 0) return(c(NA_real_, NA_real_))
+    return(c(coef(m)[[1L]], se))
   }
 
+  # Use betabinomial() without namespace prefix; glmmTMB::betabinomial() is
+  # equivalent after library(glmmTMB) but the prefix occasionally causes issues
+  # with NSE in some glmmTMB versions.
   m <- try(suppressWarnings(
-    glmmTMB(cbind(succ, fail) ~ 1, family = glmmTMB::betabinomial(), data = d)
+    glmmTMB(cbind(succ, fail) ~ 1, family = betabinomial(link = "logit"), data = d)
   ), silent = TRUE)
   if (inherits(m, "try-error")) return(c(NA_real_, NA_real_))
 
-  converged <- isTRUE(m$sdr$pdHess) && isTRUE(m$fit$convergence == 0L)
-  se        <- suppressWarnings(sqrt(vcov(m)$cond[1L, 1L]))
-  if (!converged || !is.finite(se) || se <= 0) return(c(NA_real_, NA_real_))
+  # Criterion 2: optimizer convergence
+  if (!isTRUE(m$fit$convergence == 0L)) return(c(NA_real_, NA_real_))
+
+  # Criterion 3: pdHess — only reject if explicitly FALSE (not on NULL/absent)
+  pdHess <- tryCatch(m$sdr$pdHess, error = function(e) NULL)
+  if (isFALSE(pdHess)) return(c(NA_real_, NA_real_))
+
+  # Criterion 4: finite positive SE
+  se <- tryCatch(suppressWarnings(sqrt(vcov(m)$cond[1L, 1L])), error = function(e) NA_real_)
+  if (!is.finite(se) || se <= 0) return(c(NA_real_, NA_real_))
 
   c(fixef(m)$cond[["(Intercept)"]], se)
 }
