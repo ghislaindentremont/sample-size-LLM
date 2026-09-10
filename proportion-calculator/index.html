@@ -130,7 +130,7 @@ sup a{color:var(--accent-ink);font-size:0.75em;text-decoration:none;}
 <header>
   <p class="eyebrow">Analytic power &amp; sample size · One-sided proportion test</p>
   <h1>Sample size &amp; power for a single-proportion test</h1>
-  <p class="lede">Evaluate whether the true acceptable-response rate of an LLM exceeds a threshold p₀. Two methods: <b>Wilson score</b> (closed-form normal approximation) and <b>Clopper-Pearson exact</b> (exact binomial, no approximation). Both are computed analytically — not by simulation. Copy-ready R and Python code is generated for every result.</p>
+  <p class="lede">Evaluate whether the true acceptable-response rate of an LLM exceeds a performance threshold p₀. Two methods: <b>Wilson score</b> (normal approximation, recommended) and <b>Clopper-Pearson exact</b> (exact binomial, no approximation). Copy-ready R and Python code is generated for every result.</p>
 </header>
 
 <div class="calc">
@@ -192,53 +192,22 @@ sup a{color:var(--accent-ink);font-size:0.75em;text-decoration:none;}
 <div class="prose">
 
 <section>
-  <h2>Analytic vs. Monte Carlo: what the calculator actually does</h2>
-  <p>When you run a Monte Carlo simulation to estimate power — drawing thousands of random samples and counting how often the test rejects — you are approximating a number that can be computed exactly. This calculator computes that number directly, without any simulation.</p>
-  <p><b>For the Clopper-Pearson exact method,</b> the calculation is genuinely exact. The critical count <span class="m">c</span> is the smallest integer such that <span class="m">P(X ≥ c | Bin(N, p₀)) ≤ α</span>, found by summing exact binomial probabilities. Power is then <span class="m">P(X ≥ c | Bin(N, p₁))</span>, also an exact sum. In R this is one line: <code>1 - pbinom(c - 1, N, p1)</code>. The Monte Carlo simulation, if run long enough, converges to this same number — the analytic formula simply skips the simulation and gives it directly.</p>
-  <p><b>For the Wilson score method,</b> the analytic formula is a normal (CLT) approximation to the same quantity. The sample size formula is</p>
-  <pre class="formula">N = ⌈ ( z_α · √(p₀q₀) + z_β · √(p₁q₁) )² / (p₁ − p₀)² ⌉</pre>
-  <p>and the power formula at a given N is</p>
-  <pre class="formula">power = Φ( ( (p₁ − p₀) · √N  −  z_α · √(p₀q₀) ) / √(p₁q₁) )</pre>
-  <p>A simulation using the Wilson score CI will converge to a slightly different value, because the actual Wilson CI is discrete (it tests an exact count), while the formula above treats the problem continuously. The gap is typically 1–3 percentage points for the sample sizes relevant to LLM evaluation. When in doubt, the CP exact method requires no approximation and should be preferred.</p>
-  <p>The score-test power formula above is the standard one-proportion analytic result; standard references are Fleiss, Levin &amp; Paik (2003)<sup><a href="#ref3">[3]</a></sup> and Lachin (1981)<sup><a href="#ref4">[4]</a></sup>.</p>
-  <div class="callout"><b>Why not just simulate?</b> Simulation with 10 000 replicates has a standard error of roughly √(0.8 × 0.2 / 10 000) ≈ 0.4 pp near 80% power. The analytic formulas are exact (CP) or have negligible error (Wilson) and run in milliseconds. Simulation is valuable for validating a specific test implementation; the analytic formulas are the right tool for planning.</div>
-</section>
-
-<section>
-  <h2>Score test vs. Wald test — and what the power formula actually approximates</h2>
-  <p>The Wilson score test and the Wald test both produce a z-statistic, but they are different tests. The difference is where the standard error is evaluated:</p>
-  <p><b>Wald test:</b> SE = √(p̂(1−p̂)/N), evaluated at the <em>observed</em> proportion p̂. When p̂ is near 0 or 1, this SE collapses and confidence limits fall outside [0, 1]. This is the method to avoid at the extremes.</p>
-  <p><b>Score test (Wilson):</b> SE = √(p₀(1−p₀)/N), evaluated at the <em>null value</em> p₀ — a known constant. The rejection rule is: reject H₀ if the observed count X ≥ c, where</p>
-  <pre class="formula">c = ⌈ N·p₀ + z_α · √( N · p₀ · (1−p₀) ) ⌉</pre>
-  <p>Applying this rule to your data involves no approximation — c is a fixed integer computed from p₀ and N before you collect any observations. Constructing a one-sided Wilson confidence interval and checking whether it excludes p₀ is exactly equivalent.</p>
-  <p><b>The power formula is a CLT approximation of the score test's true power.</b> The score test's true power is P(X ≥ c | Binomial(N, p₁)) — the same kind of exact binomial tail sum that CP uses. For the Wilson method, this sum is approximated by treating p̂ = X/N as normally distributed under H₁ (p̂ ≈ N(p₁, p₁q₁/N)), which yields the closed-form formula above. This approximation is what enables a one-line sample size formula; its error is typically 1–3 pp for the N values relevant to LLM evaluation.</p>
-  <div class="callout"><b>In short:</b> The power formula approximates the power of the score test — not the Wald test. The score and Wald tests have different rejection rules (null SE vs. observed SE). When you collect data, apply the score rejection rule X ≥ c. If you want exact power at the planning stage rather than an approximation, use the CP method.</div>
-</section>
-
-<section>
-  <h2>Why <code>pwr.p.test()</code> gives a different answer</h2>
-  <p>The <code>pwr</code> package in R uses Cohen's h, an arcsine-transformation effect size:</p>
-  <pre class="formula">h = 2 · arcsin(√p₁) − 2 · arcsin(√p₀)</pre>
-  <p>and the sample size formula <span class="m">N = ⌈(z_α + z_β)² / h²⌉</span>. For p₀ = 0.90, p₁ = 0.95, α = 0.05, one-sided, this gives <b>N = 167</b>.</p>
-  <p>However, at N = 167, the Wilson score test achieves only <b>75.8% power</b> and the CP exact test achieves <b>78.4% power</b> — not the 80% that was targeted. The correct sample sizes using Wilson and CP are <b>N = 184</b> and <b>N = 179</b> respectively.</p>
-  <div class="callout warn"><b>The arcsine approximation underestimates the required sample size</b> when p is far from 0.5. It was designed as a variance-stabilizing transformation and works well near p = 0.5, but it becomes increasingly inaccurate as p approaches 0 or 1. For proportions above 0.90, the Wilson or CP formulas should be used.</div>
-  <p>If you ran a simulation at N = 167 and observed power near 78%, that simulation was correctly reflecting that N = 167 is underpowered for the Wilson and CP tests at the 80% target. The <code>pwr</code> result was the source of the discrepancy, not the simulation.</p>
-</section>
-
-<section>
-  <h2>Which method to report</h2>
-  <p>For clinical or regulatory submissions, the <b>CP exact</b> method is preferred: the type I error is guaranteed to be at or below the nominal α (there is no approximation), and regulators often require a method with this guarantee. The achieved α is typically slightly below the nominal (e.g., 4.9% instead of 5%) due to the discreteness of the binomial distribution.</p>
-  <p>For general planning — grant applications, preregistrations, publication — the <b>Wilson score</b> method is the standard modern recommendation.<sup><a href="#ref1">[1]</a><a href="#ref2">[2]</a></sup> Wilson (1927)<sup><a href="#ref1">[1]</a></sup> introduced the score interval; subsequent evaluations by Agresti &amp; Coull (1998)<sup><a href="#ref2">[2]</a></sup> and Brown, Cai &amp; DasGupta (2001)<sup><a href="#ref3a">[3]</a></sup> confirmed it has better average coverage properties than the Wald interval across all p, and better average coverage than CP near the boundaries (because CP is systematically conservative — it always over-covers). Agresti &amp; Coull's finding, summarised in their title "Approximate is better than exact," is that CP's over-coverage can itself be a defect when the goal is to reach exactly the nominal level. For proportions far from 0.5 — exactly the regime of LLM evaluation (p₀ ≈ 0.90) — the Wald interval can produce limits outside [0, 1] and is the one method to avoid; the Wilson and CP methods both remain well-behaved.</p>
+  <h2>Wilson score vs. Clopper-Pearson exact</h2>
+  <p>Both methods test H₀: p ≤ p₀ against H₁: p > p₀ and share the same decision rule: reject H₀ if the number of acceptable responses X ≥ c, where c is the critical count derived from p₀, N, and α.</p>
+  <p><b>Wilson score</b> (recommended for planning) uses a normal approximation. The sample size formula is closed-form:</p>
+  <pre class="formula">N = ⌈ ( z_α · √(p₀q₀)  +  z_β · √(p₁q₁) )² / (p₁ − p₀)² ⌉</pre>
+  <p>The approximation is reliable when N·(1 − p₀) ≥ 10 — for p₀ = 0.90 this means N ≥ 100, a condition met by all sample sizes recommended for 80% power at proportions typical in LLM evaluation. Wilson score is the standard modern recommendation for proportion intervals and sample size planning.<sup><a href="#ref1">[1]</a><a href="#ref2">[2]</a><a href="#ref3">[3]</a></sup></p>
+  <p><b>Clopper-Pearson exact</b> evaluates P(X ≥ c | Bin(N, p)) directly, with no approximation. The type I error is guaranteed at or below α (achieved α is typically slightly below nominal due to the discreteness of the binomial). Use CP when the required N falls below 100, or when a strict type I error guarantee is required.</p>
 </section>
 
 <section>
   <h2>Assumptions</h2>
   <dl class="assume">
-    <div><dt>Responses are independent.</dt><dd>Each judgment is a separate, independent Bernoulli trial. <span class="why">Multiple responses to the same prompt, or multi-turn conversations, violate independence and reduce effective N below the nominal count. Use the Beta-Binomial calculator if responses are clustered by question.</span></dd></div>
-    <div><dt>The rubric is fixed before data collection.</dt><dd>Acceptable/not-acceptable criteria are defined and locked before any responses are seen. <span class="why">Post-hoc rubric changes make the observed rate uninterpretable.</span></dd></div>
+    <div><dt>Responses are independent.</dt><dd>Each judgment is a separate, independent Bernoulli trial. <span class="why">Multiple responses to the same prompt violate independence and reduce effective N below the nominal count. These formulas will overstate power if responses are clustered by question.</span></dd></div>
+    <div><dt>The rubric is fixed before data collection.</dt><dd><span class="why">Acceptable/not-acceptable criteria must be defined and locked before any responses are seen. Post-hoc rubric changes make the observed rate uninterpretable.</span></dd></div>
     <div><dt>Prompts are a representative sample from the target population.</dt><dd><span class="why">If your prompts are easier or differently distributed than real-world queries, the estimated rate applies to your prompt set, not deployment traffic.</span></dd></div>
-    <div><dt>N is fixed before data collection.</dt><dd><span class="why">Sequential stopping rules or interim analyses alter the type I error unless explicitly accounted for.</span></dd></div>
-    <div><dt>Judgments are accurate.</dt><dd><span class="why">Rater disagreement or lenient grading shifts the observed proportion. Measure and report inter-rater agreement separately.</span></dd></div>
+    <div><dt>N is fixed before data collection.</dt><dd><span class="why">Sequential stopping or interim analyses alter the type I error unless explicitly accounted for.</span></dd></div>
+    <div><dt>Judgments are accurate.</dt><dd><span class="why">Rater disagreement shifts the observed proportion. Measure and report inter-rater agreement separately.</span></dd></div>
   </dl>
 </section>
 
@@ -247,18 +216,14 @@ sup a{color:var(--accent-ink);font-size:0.75em;text-decoration:none;}
   <ol class="refs">
     <li id="ref1"><span class="ref-cite">Wilson 1927</span> — Wilson, E. B. (1927). Probable inference, the law of succession, and statistical inference. <i>Journal of the American Statistical Association</i>, 22(158), 209–212. <a href="https://doi.org/10.1080/01621459.1927.10502953" target="_blank" rel="noopener">doi:10.1080/01621459.1927.10502953</a></li>
     <li id="ref2"><span class="ref-cite">Agresti &amp; Coull 1998</span> — Agresti, A., &amp; Coull, B. A. (1998). Approximate is better than "exact" for interval estimation of binomial proportions. <i>The American Statistician</i>, 52(2), 119–126. <a href="https://doi.org/10.1080/00031305.1998.10480550" target="_blank" rel="noopener">doi:10.1080/00031305.1998.10480550</a></li>
-    <li id="ref3a"><span class="ref-cite">Brown, Cai &amp; DasGupta 2001</span> — Brown, L. D., Cai, T. T., &amp; DasGupta, A. (2001). Interval estimation for a binomial proportion. <i>Statistical Science</i>, 16(2), 101–133. <a href="https://doi.org/10.1214/ss/1009213286" target="_blank" rel="noopener">doi:10.1214/ss/1009213286</a></li>
-    <li id="ref3"><span class="ref-cite">Fleiss, Levin &amp; Paik 2003</span> — Fleiss, J. L., Levin, B., &amp; Paik, M. C. (2003). <i>Statistical Methods for Rates and Proportions</i> (3rd ed.). Wiley. <a href="https://doi.org/10.1002/0471445428" target="_blank" rel="noopener">doi:10.1002/0471445428</a></li>
-    <li id="ref4"><span class="ref-cite">Lachin 1981</span> — Lachin, J. M. (1981). Introduction to sample size determination and power analysis for clinical trials. <i>Controlled Clinical Trials</i>, 2(2), 93–113. <a href="https://doi.org/10.1016/0197-2456(81)90001-5" target="_blank" rel="noopener">doi:10.1016/0197-2456(81)90001-5</a></li>
+    <li id="ref3"><span class="ref-cite">Brown, Cai &amp; DasGupta 2001</span> — Brown, L. D., Cai, T. T., &amp; DasGupta, A. (2001). Interval estimation for a binomial proportion. <i>Statistical Science</i>, 16(2), 101–133. <a href="https://doi.org/10.1214/ss/1009213286" target="_blank" rel="noopener">doi:10.1214/ss/1009213286</a></li>
   </ol>
 </section>
 
 </div>
 
 <footer>
-  All calculations run in your browser — nothing is sent anywhere. The R and Python code blocks above reproduce every result exactly and can be pasted directly into a session to verify independently.
-  <br><br>
-  Related: <a href="../index.html">Beta-Binomial calculator</a> for clustered designs (k responses per question).
+  All calculations run in your browser — nothing is sent anywhere. The R and Python code above reproduces every result exactly and can be pasted directly into a session to verify independently.
 </footer>
 
 </div><!-- /page -->
@@ -529,16 +494,6 @@ function render(){
     html+='<tr><td>Type I error (α)</td><td>nominal '+esc(v.alpha)+'</td><td class="c">'+fV(rE.alpha,4)+' (achieved)</td></tr>';
   }
   html+='</tbody></table>';
-
-  // Arcsine note (only shown for the default region where the gap is meaningful)
-  if(v.p0>=0.80&&v.p1>=0.85&&v.p1-v.p0<=0.15&&v.mode==='n'){
-    var h=2*(Math.asin(Math.sqrt(v.p1))-Math.asin(Math.sqrt(v.p0)));
-    var za=qnorm(1-v.alpha),zb=qnorm(v.target);
-    var N_arc=Math.ceil(Math.pow((za+zb)/h,2));
-    var powArcW=wilsonAt(N_arc,v.p0,v.p1,v.alpha).power;
-    var powArcE=cpAt(N_arc,v.p0,v.p1,v.alpha).power;
-    html+='<div class="note"><b>Note on <code>pwr.p.test()</code> in R:</b> The arcsine (Cohen\'s h) formula gives N = '+N_arc+' for these parameters, but at N = '+N_arc+' the Wilson test has '+fP(powArcW)+' power and the CP test has '+fP(powArcE)+' power — below the '+fP(v.target)+' target. Use the values above. See the documentation below for explanation.</div>';
-  }
 
   body.innerHTML=html;
 

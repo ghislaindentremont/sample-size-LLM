@@ -1,34 +1,42 @@
-# LLM Evaluation Power Calculator
+# LLM Evaluation Sample Size Calculator
 
-A single-page, dependency-free website for planning evaluation studies of LLM
-responses. Researchers judge N responses as acceptable or not, and want to show
-that the true acceptable rate exceeds a performance threshold (default 0.90)
-using a one-sided, one-sample proportion test. Given an expected proportion
-(default 0.95) and a significance level, the page computes either
+A single-page, dependency-free browser tool for planning LLM response evaluation studies. The calculator lives at [`proportion-calculator/index.html`](proportion-calculator/index.html).
+
+## What it does
+
+Researchers judge N LLM responses as acceptable or not, and want to show that the true acceptable rate exceeds a performance threshold (default p₀ = 0.90) at a given significance level. Enter your parameters to get:
 
 - the **sample size** needed to reach a target power, or
-- the **power** achieved with a fixed N,
+- the **power** achieved at a fixed N.
 
-using either an exact binomial test (recommended) or the normal approximation.
-It also states the statistical assumptions under which the test is valid.
+Two methods are computed side by side:
+
+| Method | Approach | When to use |
+|---|---|---|
+| **Wilson score** | Normal (CLT) approximation; closed-form | Default — reliable for N ≥ 100 at p₀ = 0.90 |
+| **Clopper-Pearson exact** | Exact binomial; no approximation | Strict type I error guarantee, or N < 100 |
+
+Copy-ready R and Python code is generated for every result.
 
 ## Running it
 
-Open `index.html` in a browser. Everything is computed client-side; there is no
-build step and no server.
+Open `proportion-calculator/index.html` in a browser. Everything runs client-side; no build step or server needed.
 
-To host on GitHub Pages: Settings → Pages → deploy from the `main` branch root.
+To host on GitHub Pages: Settings → Pages → deploy from the `main` branch, folder `/proportion-calculator`.
 
-## Method
+## Reference values
 
-- **Hypotheses:** H₀: p ≤ p₀ vs H₁: p > p₀, where p is the true probability a
-  response is judged acceptable.
-- **Exact binomial:** the critical count c is the smallest integer with
-  P(X ≥ c | N, p₀) ≤ α; power is P(X ≥ c | N, p₁). Sample size is the smallest
-  N whose power reaches the target.
-- **Normal approximation:**
-  N = ⌈((z_α√(p₀q₀) + z_β√(p₁q₁)) / (p₁ − p₀))²⌉ and
-  power = Φ(((p₁ − p₀)√N − z_α√(p₀q₀)) / √(p₁q₁)).
+For the defaults (p₀ = 0.90, p₁ = 0.95, α = 0.05, 80% power):
 
-Reference values for the defaults (p₀ = 0.90, p₁ = 0.95, α = 0.05, power = 0.80):
-exact N = 179 (reject if X ≥ 168), normal N = 184.
+| Method | N | Reject H₀ if |
+|---|---|---|
+| Wilson score | 184 | X ≥ 173 |
+| Clopper-Pearson exact | 179 | X ≥ 168 |
+
+## Repository layout
+
+```
+proportion-calculator/   active website
+analysis/                R validation script and manuscript figures
+.archive/                archived materials (not part of the active site)
+```
