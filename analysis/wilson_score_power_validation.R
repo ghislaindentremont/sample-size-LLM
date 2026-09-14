@@ -143,10 +143,6 @@ fig1 <- ggplot(fig1_df, aes(x = N, y = power, color = factor(p1))) +
   ) +
   labs(
     title    = "H₀: p ≤ 0.90  •  H₁: p > 0.90",
-    subtitle = paste0(
-      "Wilson score test, one-sided α = ", alpha,
-      "  —  power from analytic CLT formula"
-    ),
     x     = "Sample size (N)",
     y     = "Power",
     color = "Expected\nproportion (p₁)"
@@ -154,7 +150,6 @@ fig1 <- ggplot(fig1_df, aes(x = N, y = power, color = factor(p1))) +
   theme_minimal(base_size = 13) +
   theme(
     plot.title       = element_text(face = "bold", hjust = 0.5),
-    plot.subtitle    = element_text(color = "grey40", size = 10, hjust = 0.5),
     panel.grid.minor = element_blank(),
     legend.position  = "right"
   )

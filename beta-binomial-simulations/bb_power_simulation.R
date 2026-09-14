@@ -276,7 +276,6 @@ p1 <- ggplot(long1, aes(k, value, colour = C, group = C)) +
   facet_grid(scenario ~ method) +
   scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
   labs(title    = "Part 1 — Power under equal costs  (C = N × k)",
-       subtitle = "k = 1 maximises power for every scenario and budget",
        x = "k  (draws per entity;  N = C/k)", y = "Power", colour = "Budget C") +
   theme_bw()
 print(p1)
@@ -322,7 +321,6 @@ p2 <- ggplot(long2, aes(k, value, colour = C, group = C)) +
   facet_grid(scenario ~ method) +
   scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
   labs(title    = "Part 2 — Type I error under H0  (mu = 0.90)",
-       subtitle = "glmmTMB tracks alpha = 0.05 (red line); naive Wilson score inflates when rho > 0 and k > 1",
        x = "k  (draws per entity;  N = C/k)", y = "Type I error", colour = "Budget C") +
   theme_bw()
 print(p2)
@@ -387,7 +385,6 @@ p3 <- ggplot(res3, aes(k, power_glmmTMB, colour = cost_label, group = cost_label
   facet_wrap(~ scenario, ncol = 2) +
   scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
   labs(title    = paste0("Part 3 — Power under unequal entity cost  (B = ", B, ")"),
-       subtitle = "B = N×(c_N+k);  analytic optimum k* = sqrt(c_N(1-rho)/rho)",
        x = "k  (draws per entity)", y = "Power (glmmTMB)", colour = "Entity cost c_N") +
   theme_bw() + theme(legend.position = "right")
 print(p3)
@@ -472,8 +469,8 @@ p_conv <- ggplot(conv, aes(k_f, scenario, fill = fail_glmmTMB)) +
                       labels = pct_fmt, name = "glmmTMB\nfailures") +
   facet_wrap(~ panel, ncol = 3, scales = "free_y") +
   labs(title    = "glmmTMB convergence failures by simulation cell",
-       subtitle = "Share of replications dropped (non-PD Hessian, non-convergence, or invalid SE). Unreliable: > 10% dropped, or * = N_eff = Nk/VIF < 60",
-       x = "k  (draws per entity)", y = NULL) +
+       x = "k  (draws per entity)", y = NULL,
+       caption = "* N_eff = Nk/VIF < 60") +
   theme_bw() +
   theme(panel.grid = element_blank(), legend.position = "right",
         strip.text = element_text(size = 8))
