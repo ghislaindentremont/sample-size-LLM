@@ -1,2 +1,4 @@
 .DS_Store
 *.RData
+# manuscript appendix draft — not for publication via the repo
+beta-binomial-simulations/supplementary_materials.md

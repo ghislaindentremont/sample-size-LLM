@@ -92,7 +92,26 @@ n_sims      <- 1000   # replications per simulation cell
 # the beta-binomial-simulations folder itself.
 out_dir <- if (dir.exists("beta-binomial-simulations")) "beta-binomial-simulations" else "."
 save_fig <- function(name, plot, width, height)
-  ggsave(file.path(out_dir, name), plot, width = width, height = height, dpi = 150)
+  ggsave(file.path(out_dir, name), plot, width = width, height = height, dpi = 200)
+
+# ── Plot styling (manuscript figures) ─────────────────────────────────────────
+# Scenario strips ordered by intra-query correlation rho, labelled with the
+# Appendix terminology (N = queries, k = repetitions per query).
+scenario_levels <- c("Binomial (rho=0)", "Unimodal (rho=0.024)", "J-shape (rho=0.048)",
+                     "Mild-U (rho=0.500)", "Strong-U (rho=0.833)")
+scenario_labels <- c("Binomial\n(ρ = 0)", "Unimodal\n(ρ = 0.02)", "J-shape\n(ρ = 0.05)",
+                     "Mild U-shape\n(ρ = 0.50)", "Strong U-shape\n(ρ = 0.83)")
+ms_scenario <- function(x, oneline = FALSE) {
+  lab <- if (oneline) gsub("\n", " ", scenario_labels) else scenario_labels
+  factor(x, levels = scenario_levels, labels = lab)
+}
+theme_ms <- function(base_size = 12) {
+  theme_minimal(base_size = base_size) +
+    theme(plot.title       = element_text(face = "bold", hjust = 0.5),
+          panel.grid.minor = element_blank(),
+          strip.text       = element_text(face = "bold"),
+          legend.position  = "right")
+}
 
 
 # ── Beta scenarios ─────────────────────────────────────────────────────────────
@@ -142,17 +161,21 @@ make_density_df <- function(df) {
 }
 
 plot_densities <- function(df, title) {
-  ggplot(make_density_df(df), aes(x, density, colour = scenario)) +
+  d <- make_density_df(df); d$scenario_ms <- ms_scenario(d$scenario, oneline = TRUE)
+  ggplot(d, aes(x, density, colour = scenario_ms)) +
     geom_line(linewidth = 0.9) +
     geom_vline(xintercept = threshold, linetype = "dashed", colour = "grey40") +
     coord_cartesian(ylim = c(0, 20)) +
-    labs(title  = title,
-         x = "p (per-entity acceptable rate)", y = "Density", colour = NULL) +
-    theme_bw() + theme(legend.position = "top")
+    labs(title = title, x = "Query-wise acceptability probability (pᵢ)",
+         y = "Density", colour = NULL) +
+    guides(colour = guide_legend(nrow = 2)) +
+    theme_ms() + theme(legend.position = "top")
 }
 
 print(plot_densities(betas_h1, "H1 distributions: mean = 0.95"))
 print(plot_densities(betas_h0, "H0 null boundary: mean = 0.90"))
+save_fig("beta_distributions.png", plot_densities(betas_h1, "Query-level acceptability distributions (p = 0.95)"),
+         width = 8, height = 4.5)
 
 
 # ── Core simulation functions ──────────────────────────────────────────────────
@@ -231,11 +254,14 @@ run_grid <- function(grid) {
 pct_fmt <- function(x) paste0(round(100 * x), "%")
 
 # Pivot power_glmmTMB / power_naive to long format for faceted plots.
-to_long <- function(res, value_col, new_col) {
-  rbind(
-    data.frame(res, method = "glmmTMB (Beta-Binomial)", value = res$power_glmmTMB),
-    data.frame(res, method = "Naive Wilson score (pooled)", value = res$power_naive)
+to_long <- function(res) {
+  out <- rbind(
+    data.frame(res, method = "GLMM (Beta Binomial)", value = res$power_glmmTMB),
+    data.frame(res, method = "Wilson score test",    value = res$power_naive)
   )
+  out$method      <- factor(out$method, levels = c("GLMM (Beta Binomial)", "Wilson score test"))
+  out$scenario_ms <- ms_scenario(out$scenario)
+  out
 }
 
 
@@ -272,14 +298,15 @@ long1$C <- factor(long1$C)
 
 p1 <- ggplot(long1, aes(k, value, colour = C, group = C)) +
   geom_hline(yintercept = 0.80, linetype = "dashed", colour = "grey50") +
-  geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
-  facet_grid(scenario ~ method) +
-  scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
-  labs(title    = "Part 1 — Power under equal costs  (C = N × k)",
-       x = "k  (draws per entity;  N = C/k)", y = "Power", colour = "Budget C") +
-  theme_bw()
+  geom_line(linewidth = 0.8) + geom_point(size = 1.6) +
+  facet_grid(scenario_ms ~ method) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25), labels = pct_fmt) +
+  scale_x_continuous(breaks = k_vals) +
+  labs(title = "Power under equal cost  (C = N × k)",
+       x = "Repetitions per query (k)", y = "Power", colour = "Total cost (C)") +
+  theme_ms()
 print(p1)
-save_fig("power_equal_costs.png", p1, width = 9, height = 10)
+save_fig("power_equal_costs.png", p1, width = 8, height = 10)
 
 cat("\n── Convergence failures > 5% (Part 1) ──────────────────────────────────\n")
 f1 <- res1[res1$fail_glmmTMB > 0.05,
@@ -317,14 +344,15 @@ long2$C <- factor(long2$C)
 
 p2 <- ggplot(long2, aes(k, value, colour = C, group = C)) +
   geom_hline(yintercept = alpha_level, linetype = "dashed", colour = "red") +
-  geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
-  facet_grid(scenario ~ method) +
-  scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
-  labs(title    = "Part 2 — Type I error under H0  (mu = 0.90)",
-       x = "k  (draws per entity;  N = C/k)", y = "Type I error", colour = "Budget C") +
-  theme_bw()
+  geom_line(linewidth = 0.8) + geom_point(size = 1.6) +
+  facet_grid(scenario_ms ~ method) +
+  scale_y_continuous(limits = c(0, 0.5), breaks = seq(0, 0.5, 0.1), labels = pct_fmt) +
+  scale_x_continuous(breaks = k_vals) +
+  labs(title = "Type I error rate under H₀  (p = 0.90;  C = N × k)",
+       x = "Repetitions per query (k)", y = "Type I error rate", colour = "Total cost (C)") +
+  theme_ms()
 print(p2)
-save_fig("type1_equal_costs.png", p2, width = 9, height = 10)
+save_fig("type1_equal_costs.png", p2, width = 8, height = 10)
 
 cat("\n── Convergence failures > 5% (Part 2) ──────────────────────────────────\n")
 f2 <- res2[res2$fail_glmmTMB > 0.05,
@@ -376,19 +404,21 @@ cat("\n"); print(res3[, c("scenario","cN","k","N","power_glmmTMB","fail_glmmTMB"
 
 write.csv(res3, file.path(out_dir, "results_part3.csv"), row.names = FALSE)
 
-res3$cost_label <- factor(paste0("c_N = ", res3$cN),
-                           levels = paste0("c_N = ", sort(unique(res3$cN))))
+res3$cost_label  <- factor(paste0("c = ", res3$cN),
+                            levels = paste0("c = ", sort(unique(res3$cN))))
+res3$scenario_ms <- ms_scenario(res3$scenario, oneline = TRUE)
 
 p3 <- ggplot(res3, aes(k, power_glmmTMB, colour = cost_label, group = cost_label)) +
   geom_hline(yintercept = 0.80, linetype = "dashed", colour = "grey50") +
-  geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
-  facet_wrap(~ scenario, ncol = 2) +
-  scale_y_continuous(limits = c(0, 1), labels = pct_fmt) +
-  labs(title    = paste0("Part 3 — Power under unequal entity cost  (B = ", B, ")"),
-       x = "k  (draws per entity)", y = "Power (glmmTMB)", colour = "Entity cost c_N") +
-  theme_bw() + theme(legend.position = "right")
+  geom_line(linewidth = 0.8) + geom_point(size = 1.6) +
+  facet_wrap(~ scenario_ms, ncol = 2) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25), labels = pct_fmt) +
+  scale_x_continuous(breaks = k_vals3) +
+  labs(title = paste0("Power under unequal cost  (B = N × (c + k) = ", B, ")"),
+       x = "Repetitions per query (k)", y = "Power (GLMM)", colour = "Query cost (c)") +
+  theme_ms()
 print(p3)
-save_fig("power_unequal_costs.png", p3, width = 9, height = 8)
+save_fig("power_unequal_costs.png", p3, width = 8, height = 7)
 
 cat("\n── Part 3: empirically optimal k vs analytic k* by scenario and entity cost ──\n")
 cat("   k_opt  = argmax power_glmmTMB within each scenario × c_N cell\n")
@@ -433,9 +463,9 @@ cat("  Cells with fail_k_opt > 0.10 are flagged above during run_grid.\n")
 
 conv_cols <- c("scenario", "a", "b", "k", "N", "fail_glmmTMB", "power_glmmTMB")
 conv <- rbind(
-  data.frame(part = "Part 1: power (equal cost)",  design = paste0("C = ",   res1$C),  res1[, conv_cols]),
-  data.frame(part = "Part 2: type I (equal cost)", design = paste0("C = ",   res2$C),  res2[, conv_cols]),
-  data.frame(part = "Part 3: power (unequal cost)", design = paste0("c_N = ", res3$cN), res3[, conv_cols])
+  data.frame(part = "Case 1: power",        design = paste0("C = ", res1$C),  res1[, conv_cols]),
+  data.frame(part = "Case 1: type I error", design = paste0("C = ", res2$C),  res2[, conv_cols]),
+  data.frame(part = "Case 2: power",        design = paste0("c = ", res3$cN), res3[, conv_cols])
 )
 conv$rho   <- ifelse(grepl("^Binomial", conv$scenario), 0, 1 / (conv$a + conv$b + 1))
 conv$N_eff <- round(conv$N * conv$k / (1 + (conv$k - 1) * conv$rho))
@@ -461,19 +491,21 @@ conv$panel   <- factor(panel_lab, levels = unique(panel_lab))
 conv$k_f     <- factor(conv$k, levels = sort(unique(conv$k)))
 conv$label   <- paste0(sprintf("%.0f%%", 100 * conv$fail_glmmTMB), ifelse(conv$flag_small, "*", ""))
 
-p_conv <- ggplot(conv, aes(k_f, scenario, fill = fail_glmmTMB)) +
+conv$scenario_ms <- ms_scenario(conv$scenario, oneline = TRUE)
+conv$scenario_ms <- factor(conv$scenario_ms, levels = rev(levels(conv$scenario_ms)))  # top-to-bottom by rho
+
+p_conv <- ggplot(conv, aes(k_f, scenario_ms, fill = fail_glmmTMB)) +
   geom_tile(colour = "white") +
   geom_text(aes(label = label, colour = fail_glmmTMB > 0.35), size = 2.8) +
   scale_colour_manual(values = c(`FALSE` = "black", `TRUE` = "white"), guide = "none") +
   scale_fill_gradient(low = "#f7fbff", high = "#b2182b", limits = c(0, 1),
-                      labels = pct_fmt, name = "glmmTMB\nfailures") +
+                      labels = pct_fmt, name = "GLMM fits\ndiscarded") +
   facet_wrap(~ panel, ncol = 3, scales = "free_y") +
-  labs(title    = "glmmTMB convergence failures by simulation cell",
-       x = "k  (draws per entity)", y = NULL,
-       caption = "* N_eff = Nk/VIF < 60") +
-  theme_bw() +
-  theme(panel.grid = element_blank(), legend.position = "right",
-        strip.text = element_text(size = 8))
+  labs(title = "GLMM convergence failures by simulation condition",
+       x = "Repetitions per query (k)", y = NULL,
+       caption = "* fewer than 60 effective observations (N × k / VIF)") +
+  theme_ms(base_size = 11) +
+  theme(panel.grid = element_blank(), strip.text = element_text(size = 8.5, face = "bold"))
 print(p_conv)
 save_fig("convergence_failures.png", p_conv, width = 12, height = 10)
 

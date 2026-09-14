@@ -1,24 +1,24 @@
-# LLM Evaluation Sample Size Calculator
+# How Many Queries Are Enough? — Sample Size Calculator
 
-A single-page, dependency-free browser tool for planning LLM response evaluation studies. The calculator lives at [`proportion-calculator/index.html`](proportion-calculator/index.html).
+Companion repository to the *JMIR AI* editorial **How Many Queries Are Enough? Sample Size Calculations in Early-Stage LLM Validation**. It contains a single-page, dependency-free browser calculator ([`proportion-calculator/index.html`](proportion-calculator/index.html)), the R scripts behind the editorial's figures, and the Monte Carlo simulation reported in the Appendix.
 
-## What it does
+## What the calculator does
 
-Researchers judge N LLM responses as acceptable or not, and want to show that the true acceptable rate exceeds a performance threshold (default p₀ = 0.90) at a given significance level. Enter your parameters to get:
+Domain experts rate each of N LLM responses to unique user queries (query-response pairs) as acceptable or unacceptable, and the study tests whether the true proportion of acceptable LLM responses exceeds a pre-defined absolute performance threshold (default p₀ = 0.90; one-sided). Enter your parameters to get:
 
-- the **sample size** needed to reach a target power, or
+- the **sample size** (number of query-response pairs) needed to reach a target power, or
 - the **power** achieved at a fixed N.
 
 Two methods are computed side by side:
 
-| Method | Approach | When to use |
+| Method | Approach | Role |
 |---|---|---|
-| **Wilson score** | Normal (CLT) approximation; closed-form | Default — reliable for N ≥ 100 at p₀ = 0.90 |
-| **Clopper-Pearson exact** | Exact binomial; no approximation | Strict type I error guarantee, or N < 100 |
+| **Wilson score** | Normal-approximation score test formula; closed-form | Recommended (better coverage than Wald and Clopper-Pearson) |
+| **Clopper-Pearson** | Exact binomial; no approximation | Shown for comparison; conservative |
 
 Copy-ready R and Python code is generated for every result.
 
-A second tab, **Clustered design (Beta-Binomial)**, covers studies that judge k responses per prompt. It applies the variance inflation factor VIF = 1 + (k − 1)ρ to the Wilson score formulas, shows what the naive test would report versus what it actually delivers under clustering, and gives the cost-optimal number of responses per prompt.
+A second tab, **Repetitions (Beta Binomial)**, covers studies that generate k LLM responses per query. It applies the variance inflation factor VIF = 1 + (k − 1)ρ (ρ = intra-query correlation) to the Wilson score formulas, shows what the uncorrected test would report versus what it actually delivers, and gives the cost-optimal number of repetitions per query.
 
 ## Running it
 
