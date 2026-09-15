@@ -6,28 +6,33 @@
 # N = entities (questions); k = draws per entity (responses per question).
 # Entity i has true acceptable rate p_i ~ Beta(a, b); X_i | p_i ~ Bin(k, p_i).
 #
-# ── Three questions ────────────────────────────────────────────────────────────
+# ── Cost model (one model, two cases) ─────────────────────────────────────────
 #
-# PART 1 — Equal costs (C = N*k):
-#   For a fixed total-response budget, how does power vary with k?
-#   Result: k = 1 always maximises power. VIF = 1 + (k-1)*rho >= 1 means
-#   within-entity replication is less informative than recruiting a new entity.
+# Every response costs one unit. Each query additionally incurs a fixed
+# overhead c (in units of one response) for obtaining the query itself.
+# Total cost of a design with N queries and k responses per query:
+#     C = N * (c + k).
+# Case 1 (Parts 1-2): c = 0, so C = N*k — the budget buys responses only.
+# Case 2 (Part 3):    c > 0 — each new query carries an overhead that
+#                     additional responses to an existing query avoid.
 #
-# PART 2 — Type I error (same grid, null distribution mu = 0.90):
+# PART 1 — Case 1 power (c = 0; C = N*k):
+#   For a fixed budget, how does power vary with k?
+#   Result: k = 1 always maximises power. VIF = 1 + (k-1)*rho >= 1 means an
+#   additional response to an existing query is less informative than a
+#   response to a new query.
+#
+# PART 2 — Case 1 type I error (same grid, null distribution mu = 0.90):
 #   Which test controls alpha when data are clustered?
 #   Result: glmmTMB holds type I error near alpha. The naive Wilson score
 #   test inflates it when rho > 0 and k > 1 (treats N*k correlated outcomes
 #   as independent); at k = 1 it is exactly valid for any rho.
 #
-# PART 3 — Unequal entity cost (B = N*(c_N + k)):
-#   If recruiting a new entity (question) costs c_N times a single response,
-#   does k > 1 ever maximise power?
-#   Analytic result: the effective number of independent binary outcomes is
-#     N_eff = N*k / VIF = B*k / [(c_N+k)(1+(k-1)*rho)],
-#   maximised at  k* = sqrt(c_N*(1-rho)/rho)  (classical optimal cluster
-#   size). k = 1 is optimal only when c_N = 0 or rho is large; for low-rho
-#   entities (J-shape, Unimodal) or expensive entities (c_N = 20) the optimum
-#   moves to k = 5-20. The simulation confirms this.
+# PART 3 — Case 2 power (c > 0; C = N*(c + k), C = 1000):
+#   Does k > 1 ever maximise power once queries carry an overhead?
+#   Result (simulation): for low-rho scenarios (Unimodal, J-shape) k = 10-20
+#   is best at every c > 0 examined, and the advantage grows with c; for the
+#   U-shaped scenarios k = 1 stays best or nearly best even at c = 20.
 #
 # ── Tests compared ─────────────────────────────────────────────────────────────
 #
@@ -36,7 +41,7 @@
 #           unidentifiable from one binary draw per entity), so the Wilson
 #           score test below is used. (A Wald logistic-GLM test at k = 1 has
 #           zero power for N < ~60 because p_hat = 1 gives a degenerate logit;
-#           this produced power = 0 in the c_N = 20 cells of Part 3.)
+#           this produced power = 0 in the c = 20 cells of Part 3.)
 #
 # naive     Wilson score test on all M = N*k pooled outcomes — the test
 #           recommended in the manuscript and the calculator:
@@ -62,8 +67,9 @@
 # biased DOWNWARD. In addition, the Wald test on the logit scale is markedly
 # conservative when the effective sample size N_eff = N*k/VIF is small
 # (< ~60) and p_hat is near 1 (Hauck-Donner effect). Together these produce
-# the dip at k = 3 for c_N = 20 in Part 3 (analytic power there is monotone
-# in k). Cells with fail_glmmTMB > 0.10 or N_eff < 60 are flagged in the
+# the dip at k = 3 for c = 20 in Part 3 (that design has more effectively
+# independent observations than k = 1, so the drop is not a loss of
+# information). Cells with fail_glmmTMB > 0.10 or N_eff < 60 are flagged in the
 # convergence summary (`unreliable`) and should not be over-interpreted.
 #
 # ── Outputs (written to out_dir) ──────────────────────────────────────────────
@@ -96,7 +102,7 @@ save_fig <- function(name, plot, width, height)
 
 # ── Plot styling (manuscript figures) ─────────────────────────────────────────
 # Scenario strips ordered by intra-query correlation rho, labelled with the
-# Appendix terminology (N = queries, k = repetitions per query).
+# Appendix terminology (N = queries, k = responses per query).
 scenario_levels <- c("Binomial (rho=0)", "Unimodal (rho=0.024)", "J-shape (rho=0.048)",
                      "Mild-U (rho=0.500)", "Strong-U (rho=0.833)")
 scenario_labels <- c("Binomial\n(ρ = 0)", "Unimodal\n(ρ = 0.02)", "J-shape\n(ρ = 0.05)",
@@ -266,7 +272,7 @@ to_long <- function(res) {
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PART 1 — Equal costs: power  (C = N × k)
+# PART 1 — Case 1 (c = 0): power  (C = N × k)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 C_vals <- c(200, 300, 400)
@@ -286,7 +292,7 @@ g1_bin$scenario <- "Binomial (rho=0)"
 
 grid1 <- rbind(g1_bb, g1_bin)
 
-cat("══ PART 1: Power under equal costs (C = N × k) ══════════════════════════\n")
+cat("══ PART 1: Case 1 — no per-query overhead (c = 0; C = N × k): power ═════\n")
 res1 <- run_grid(grid1)
 cat("\n"); print(res1[, c("scenario","C","k","N","power_glmmTMB","power_naive","fail_glmmTMB")],
                 digits = 3, row.names = FALSE)
@@ -302,8 +308,8 @@ p1 <- ggplot(long1, aes(k, value, colour = C, group = C)) +
   facet_grid(scenario_ms ~ method) +
   scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25), labels = pct_fmt) +
   scale_x_continuous(breaks = k_vals) +
-  labs(title = "Power under equal cost  (C = N × k)",
-       x = "Repetitions per query (k)", y = "Power", colour = "Total cost (C)") +
+  labs(title = "Power  —  no per-query overhead  (c = 0;  C = N × k)",
+       x = "Responses per query (k)", y = "Power", colour = "Budget (C)") +
   theme_ms()
 print(p1)
 save_fig("power_equal_costs.png", p1, width = 8, height = 10)
@@ -318,7 +324,7 @@ cat("  Cells with fail_glmmTMB > 0.10 are unreliable (upward-biased power).\n\n"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PART 2 — Equal costs: type I error  (mu = 0.90)
+# PART 2 — Case 1 (c = 0): type I error  (mu = 0.90)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 g2_bb      <- merge(betas_h0, ck, by = NULL)
@@ -348,8 +354,8 @@ p2 <- ggplot(long2, aes(k, value, colour = C, group = C)) +
   facet_grid(scenario_ms ~ method) +
   scale_y_continuous(limits = c(0, 0.5), breaks = seq(0, 0.5, 0.1), labels = pct_fmt) +
   scale_x_continuous(breaks = k_vals) +
-  labs(title = "Type I error rate under H₀  (p = 0.90;  C = N × k)",
-       x = "Repetitions per query (k)", y = "Type I error rate", colour = "Total cost (C)") +
+  labs(title = "Type I error rate  —  no per-query overhead  (c = 0;  C = N × k)",
+       x = "Responses per query (k)", y = "Type I error rate", colour = "Budget (C)") +
   theme_ms()
 print(p2)
 save_fig("type1_equal_costs.png", p2, width = 8, height = 10)
@@ -363,41 +369,36 @@ cat("\n")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PART 3 — Unequal entity cost:  B = N × (c_N + k)
+# PART 3 — Case 2 (c > 0): power  (C = N × (c + k))
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# c_N = entity setup cost in units of per-response cost (c_k = 1, normalised).
-# Budget B = N*(c_N + k)  =>  N = floor(B / (c_N + k)).
+# Cost model (see header): C = N*(c + k), with c the per-query overhead in
+# units of one response. c = 5 means obtaining one new query costs as much
+# as generating and rating five responses. N = floor(C / (c + k)).
 #
-# c_N = 0    entities free; recovers Part 1 with C = B (N = B/k).
-# c_N = 5    one question costs as much as 5 additional responses.
-# c_N = 10   one question costs as much as 10 responses.
-# c_N = 20   very expensive entities (e.g., expert annotation or clinical setup).
-#
-# Analytic result: N_eff = N*k/VIF = B*k / [(c_N+k)(1+(k-1)*rho)], maximised
-# at k* = sqrt(c_N*(1-rho)/rho). k > 1 pays off when entities are expensive
-# relative to responses and/or rho is small. The table `opt3` below reports
-# k* next to the empirical optimum.
+# c = 0   reproduces Case 1 at a larger budget (C = N*k).
+# c = 3, 5, 10, 20   increasing overhead per query.
 #
 # Only glmmTMB power is shown (naive is excluded: it is invalid under
 # clustering for k > 1 and adds no information about optimal design).
+# The empirically best k per scenario x c is tabulated in `opt3` below.
 #
-# Cells with N < 5 are excluded; at very high c_N all N are small so
+# Cells with N < 5 are excluded; at very high c all N are small so
 # convergence failures will be common and power will be low throughout.
 
-B       <- 1000
+C_total <- 1000
 k_vals3 <- c(1, 3, 5, 10, 20)
 cN_vals <- c(0, 3, 5, 10, 20)
 
 ck3         <- expand.grid(cN = cN_vals, k = k_vals3, stringsAsFactors = FALSE)
 grid3       <- merge(betas_h1, ck3, by = NULL)
-grid3$N     <- as.integer(floor(B / (grid3$cN + grid3$k)))
+grid3$N     <- as.integer(floor(C_total / (grid3$cN + grid3$k)))
 grid3$dgp   <- "betabinom"
 grid3       <- grid3[grid3$N >= 5L, ]
 
-cat("══ PART 3: Unequal entity cost  (B = N × (c_N + k),  B =", B, ") ════════\n")
-cat("   c_N = entity setup cost (units of per-response cost)\n")
-cat("   N = floor(B / (c_N + k));  cells with N < 5 excluded\n\n")
+cat("══ PART 3: Case 2 — per-query overhead  (C = N × (c + k),  C =", C_total, ") ═══\n")
+cat("   c = per-query overhead (units of one response)\n")
+cat("   N = floor(C / (c + k));  cells with N < 5 excluded\n\n")
 res3 <- run_grid(grid3)
 cat("\n"); print(res3[, c("scenario","cN","k","N","power_glmmTMB","fail_glmmTMB")],
                 digits = 3, row.names = FALSE)
@@ -414,15 +415,14 @@ p3 <- ggplot(res3, aes(k, power_glmmTMB, colour = cost_label, group = cost_label
   facet_wrap(~ scenario_ms, ncol = 2) +
   scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25), labels = pct_fmt) +
   scale_x_continuous(breaks = k_vals3) +
-  labs(title = paste0("Power under unequal cost  (B = N × (c + k) = ", B, ")"),
-       x = "Repetitions per query (k)", y = "Power (GLMM)", colour = "Query cost (c)") +
+  labs(title = paste0("Power  —  per-query overhead  (c > 0;  C = N × (c + k) = ", C_total, ")"),
+       x = "Responses per query (k)", y = "Power (GLMM)", colour = "Per-query\noverhead (c)") +
   theme_ms()
 print(p3)
 save_fig("power_unequal_costs.png", p3, width = 8, height = 7)
 
-cat("\n── Part 3: empirically optimal k vs analytic k* by scenario and entity cost ──\n")
-cat("   k_opt  = argmax power_glmmTMB within each scenario × c_N cell\n")
-cat("   k_star = sqrt(c_N (1-rho) / rho)   (analytic optimum, continuous k)\n\n")
+cat("\n── Part 3: empirically best k by scenario and per-query overhead ────────\n")
+cat("   k_best = argmax power_glmmTMB within each scenario × c cell\n\n")
 
 opt3 <- do.call(rbind, lapply(
   split(res3, list(res3$scenario, res3$cN), drop = TRUE),
@@ -430,25 +430,22 @@ opt3 <- do.call(rbind, lapply(
     best_i <- which.max(d$power_glmmTMB)
     if (!length(best_i)) return(NULL)
     best  <- d[best_i, ]
-    rho   <- 1 / (d$a[1L] + d$b[1L] + 1)
     pw_k1 <- d$power_glmmTMB[d$k == 1L]
     data.frame(
-      scenario   = best$scenario,
-      cN         = best$cN,
-      k_star     = round(sqrt(best$cN * (1 - rho) / rho), 1),
-      k_opt      = best$k,
-      N_at_k_opt = best$N,
-      power_opt  = round(best$power_glmmTMB, 3),
-      power_k1   = round(if (length(pw_k1)) pw_k1 else NA_real_, 3),
-      fail_k_opt = round(best$fail_glmmTMB, 3)
+      scenario    = best$scenario,
+      c           = best$cN,
+      k_best      = best$k,
+      N_at_k_best = best$N,
+      power_best  = round(best$power_glmmTMB, 3),
+      power_k1    = round(if (length(pw_k1)) pw_k1 else NA_real_, 3),
+      fail_k_best = round(best$fail_glmmTMB, 3)
     )
   }
 ))
-opt3 <- opt3[order(opt3$scenario, opt3$cN), ]
+opt3 <- opt3[order(opt3$scenario, opt3$c), ]
 print(opt3, row.names = FALSE)
 write.csv(opt3, file.path(out_dir, "results_part3_optimal_k.csv"), row.names = FALSE)
-cat("\n  k_opt should track k_star (rounded to the simulated k grid).\n")
-cat("  Cells with fail_k_opt > 0.10 are flagged above during run_grid.\n")
+cat("\n  Cells with fail_k_best > 0.10 are flagged above during run_grid.\n")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -502,7 +499,7 @@ p_conv <- ggplot(conv, aes(k_f, scenario_ms, fill = fail_glmmTMB)) +
                       labels = pct_fmt, name = "GLMM fits\ndiscarded") +
   facet_wrap(~ panel, ncol = 3, scales = "free_y") +
   labs(title = "GLMM convergence failures by simulation condition",
-       x = "Repetitions per query (k)", y = NULL,
+       x = "Responses per query (k)", y = NULL,
        caption = "* fewer than 60 effective observations (N × k / VIF)") +
   theme_ms(base_size = 11) +
   theme(panel.grid = element_blank(), strip.text = element_text(size = 8.5, face = "bold"))

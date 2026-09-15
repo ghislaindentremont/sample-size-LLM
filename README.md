@@ -18,7 +18,7 @@ Two methods are computed side by side:
 
 Copy-ready R and Python code is generated for every result.
 
-A second tab, **Repetitions (Beta Binomial)**, covers studies that generate k LLM responses per query. It applies the variance inflation factor VIF = 1 + (k − 1)ρ (ρ = intra-query correlation) to the Wilson score formulas, shows what the uncorrected test would report versus what it actually delivers, and gives the cost-optimal number of repetitions per query.
+A second tab, **Multiple responses per query (Beta Binomial)**, covers studies that generate k LLM responses per query. It applies the variance inflation factor VIF = 1 + (k − 1)ρ (ρ = intra-query correlation) to the Wilson score formulas and shows what the uncorrected test would report versus what it actually delivers.
 
 ## Running it
 
