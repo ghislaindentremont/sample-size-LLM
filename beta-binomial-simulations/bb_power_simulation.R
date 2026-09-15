@@ -354,7 +354,7 @@ p2 <- ggplot(long2, aes(k, value, colour = C, group = C)) +
   facet_grid(scenario_ms ~ method) +
   scale_y_continuous(limits = c(0, 0.5), breaks = seq(0, 0.5, 0.1), labels = pct_fmt) +
   scale_x_continuous(breaks = k_vals) +
-  labs(title = "Type I error rate  —  no per-query overhead  (c = 0;  C = N × k)",
+  labs(title = "Type I error rate  —  no per-query overhead  (c = 0)",
        x = "Responses per query (k)", y = "Type I error rate", colour = "Budget (C)") +
   theme_ms()
 print(p2)
